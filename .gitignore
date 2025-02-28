@@ -398,3 +398,13 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/Build Bazaar Terraform/.idea
+Build Bazaar Terraform/.terraform.lock.hcl
+Build Bazaar Terraform/.terraform/providers/registry.terraform.io/hashicorp/aws/5.58.0/windows_386/LICENSE.txt
+Build Bazaar Terraform/Build Bazaar Terraform.iml
+Build Bazaar Terraform/terraform.tfstate
+Build Bazaar Terraform/terraform.tfstate.backup
+Build Bazaar Terraform/terraform.tfstate.d/prod/terraform.tfstate
+docker&mysql commands.txt
+Server/BuildBazaar/BuildBazaarCore/Certificates/us-east-1-bundle.pem
+Server/BuildBazaar/docker run.bat

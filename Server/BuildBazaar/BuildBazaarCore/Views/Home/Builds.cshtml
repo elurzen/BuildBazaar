@@ -1,0 +1,321 @@
+
+@{
+    ViewBag.Title = "Builds";
+    const string MAX_NAME_LENGTH = "100";
+    const string MAX_URL_LENGTH = "1000";
+}
+
+<!DOCTYPE html>
+<head>
+    <link rel="stylesheet" type="text/css" href="~/css/jquery-ui.min.css">
+    <link rel="stylesheet" type="text/css" href="~/css/Site.css">
+    <link rel="stylesheet" type="text/css" href="~/css/toastr.min.css">
+    <link rel="stylesheet" type="text/css" href="~/css/BuildBazaar.css">
+    <link rel="icon" href="~/media/bazaar-logo.png" />
+
+    <script src="~/js/jquery-3.7.1.js"></script>
+    <script src="~/js/jquery-ui.js"></script>
+    <script src="~/js/jquery.validate.js"></script>
+    <script src="~/js/modernizr-2.8.3.js"></script>
+    <script src="~/js/toastr.min.js"></script>
+    <script src="~/js/buildbazaar-universal.js"></script>
+    <script src="~/js/buildbazaar-shared.js"></script>
+    <script src="~/js/buildbazaar-builds.js"></script>
+</head>
+<body>
+    <div class="header">
+        <div class="buildBazaarHeader headerSection">
+            <div class="buildBazaarHeaderWrapper" onclick=logoClick();>
+                <img src="~/media/bazaar-logo.png">
+                <span>Build Bazaar</span>
+            </div>
+        </div>
+        <div id="poe-header" class="header-group">
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://poe.ninja/', '_blank');">
+                <img src="/media/ninja-logo.png">
+                <span>PoE Ninja</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://www.craftofexile.com/', '_blank');">
+                <img src="/media/coe-logo.ico">
+                <span>Craft of Exile</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://poedb.tw/', '_blank');">
+                <img src="/media/poedb-logo.png">
+                <span>PoE DB</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://www.poelab.com/', '_blank');">
+                <img src="/media/poelab-logo.png">
+                <span>PoE Lab</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://www.pathofexile.com/trade/', '_blank');">
+                <img src="/media/poe-logo.ico">
+                <span>Trade</span>
+            </div>
+        </div>
+        <div id="poe2-header" class="header-group">
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://orbwatch.trade', '_blank');">
+                <img src="/media/orbwatch-logo.png">
+                <span>Orb Watch</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://www.craftofexile.com/?game=poe2', '_blank');">
+                <img src="/media/coe-logo.ico">
+                <span>Craft of Exile</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://poe2db.tw/', '_blank');">
+                <img src="/media/poedb-logo.png">
+                <span>PoE DB</span>
+            </div>
+            <div class="headerSeparator"></div>
+            <div class="headerSection clickable" onclick="window.open('https://www.pathofexile.com/trade2/', '_blank');">
+                <img src="/media/poe-logo.ico">
+                <span>Trade</span>
+            </div>
+        </div>
+        <div class="headerSeparator"></div>
+        <div class="slider-wrapper">
+            <div class="slider hidden">
+                <div class="slider-button hidden"></div>
+                <div class="slider-option" data-value="1">PoE</div>
+                <div class="slider-option" data-value="2">PoE 2</div>
+            </div>
+        </div>
+        <div class="logoutHeader headerSection">
+            <div class="logoutWrapper" onclick="logout()">
+                <img id="logout-image" src="/media/logout.png" alt="Sign Out Icon">
+                <span id="logout-text">Log Out</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="content">        
+        <div class="overlay"></div>
+        <div id="main-row" class="row">
+            <div id="sidebar" class="hidden">
+                <div class="filter-container">
+                    <div id="sidebar-toggle">&#9776;</div>
+                    <input id="build-filter" type="text" placeholder="Filter">
+                </div>
+                <div class="sidebar-content">
+                    <ul id="sidebar-build-list" style="list-style-type: none;"></ul>
+                </div>
+            </div>
+            <div id="notes-column" class="column">
+                <div class="column-header">
+                    <button id="notes-edit-button" class="header-button">Edit Note</button>
+                    <button id="notes-save-button" class="header-button" style="display: none;">Save</button>
+                    <button id="notes-cancel-button" class="header-button" style="display: none;">Cancel</button>
+                </div>
+                <div class="column-container-builds">
+                    <p id="notes"></p>
+                </div>
+            </div>
+            <div class="column noscroll">
+                <div class="column-header">
+                    <div class="dropdown">
+                        <button id="dropdown-toggle" class="header-button">
+                            Select URL
+                            <svg class="svg-arrow" viewBox="0 0 10 5" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M0 0 L5 5 L10 0 Z" fill="white" />
+                            </svg>
+                        </button>
+                        <div class="dropdown-content"></div>
+                    </div>
+                </div>
+                <iframe id="iframe-window"></iframe>
+            </div>
+            <div class="column">
+                <div class="column-header">
+                    <button id="upload-image-button" class="header-button" onclick="showUploadReferenceImageForm()">Upload Image</button>
+                </div>
+                <div class="column-container-builds">
+                    <ul id="reference-image-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-build-popup" class="popup-overlay">
+        <div id="add-build-content" class="popup-content">
+            <h2>New Build</h2>
+            <form id="add-build-form" method="post">
+                <img id="add-build-thumbnail-preview" class="thumbnail-preview" src="~/media/question-mark.png" />
+                <div class="form-group">
+                    <label for="add-build-name">Build name:</label>
+                    <input id="add-build-name" type="text" class="build-name" maxlength=@MAX_NAME_LENGTH required>
+                </div>
+                <div id="add-build-thumbnail-grid" class="thumbnail-grid" style="display:none">
+                    <img src="~/media/thumbnails/126px-ascendant_avatar.png" class="thumbnail-option" data-filename="126px-ascendant_avatar.png" />
+                    <img src="~/media/thumbnails/126px-assassin_avatar.png" class="thumbnail-option" data-filename="126px-assassin_avatar.png" />
+                    <img src="~/media/thumbnails/126px-berserker_avatar.png" class="thumbnail-option" data-filename="126px-berserker_avatar.png" />
+                    <img src="~/media/thumbnails/126px-champion_avatar.png" class="thumbnail-option" data-filename="126px-champion_avatar.png" />
+                    <img src="~/media/thumbnails/126px-chieftain_avatar.png" class="thumbnail-option" data-filename="126px-chieftain_avatar.png" />
+                    <img src="~/media/thumbnails/126px-deadeye_avatar.png" class="thumbnail-option" data-filename="126px-deadeye_avatar.png" />
+                    <img src="~/media/thumbnails/126px-elementalist_avatar.png" class="thumbnail-option" data-filename="126px-elementalist_avatar.png" />
+                    <img src="~/media/thumbnails/126px-gladiator_avatar.png" class="thumbnail-option" data-filename="126px-gladiator_avatar.png" />
+                    <img src="~/media/thumbnails/126px-guardian_avatar.png" class="thumbnail-option" data-filename="126px-guardian_avatar.png" />
+                    <img src="~/media/thumbnails/126px-hierophant_avatar.png" class="thumbnail-option" data-filename="126px-hierophant_avatar.png" />
+                    <img src="~/media/thumbnails/126px-inquisitor_avatar.png" class="thumbnail-option" data-filename="126px-inquisitor_avatar.png" />
+                    <img src="~/media/thumbnails/126px-juggernaut_avatar.png" class="thumbnail-option" data-filename="126px-juggernaut_avatar.png" />
+                    <img src="~/media/thumbnails/126px-necromancer_avatar.png" class="thumbnail-option" data-filename="126px-necromancer_avatar.png" />
+                    <img src="~/media/thumbnails/126px-occultist_avatar.png" class="thumbnail-option" data-filename="126px-occultist_avatar.png" />
+                    <img src="~/media/thumbnails/126px-pathfinder_avatar.png" class="thumbnail-option" data-filename="126px-pathfinder_avatar.png" />
+                    <img src="~/media/thumbnails/126px-saboteur_avatar.png" class="thumbnail-option" data-filename="126px-saboteur_avatar.png" />
+                    <img src="~/media/thumbnails/126px-slayer_avatar.png" class="thumbnail-option" data-filename="126px-slayer_avatar.png" />
+                    <img src="~/media/thumbnails/126px-trickster_avatar.png" class="thumbnail-option" data-filename="126px-trickster_avatar.png" />
+                    <img src="~/media/thumbnails/126px-warden_avatar.png" class="thumbnail-option" data-filename="126px-warden_avatar.png" />
+                </div>
+                <div class="form-group">
+                    <label>Thumbnail: </label>
+                    <div class="thumbnail-dropdown">
+                        <label id="add-build-toggle-thumbnails" class="thumbnail-button">Select</label>
+                        <label for="add-build-upload" class="thumbnail-button">Upload</label>
+                        <input id="add-build-upload" type="file" accept="image/*"/>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="add-build-isPublic-checkbox">Public:</label>
+                    <input id="add-build-isPublic-checkbox" class="form-checkbox" type="checkbox" />
+                </div>
+                <div class="buttons">
+                    <button id="add-build-submit" type="submit">Create</button>
+                    <button id="add-build-cancel" type="button" onclick="hideAddBuildForm()">Cancel</button>                        
+                </div>
+            </form>
+        </div>            
+    </div>
+
+    <div id="edit-build-popup" class="popup-overlay">
+        <div id="edit-build-content" class="popup-content">
+            <h2>Edit Build</h2>
+            <form id="edit-build-form" method="post">
+                <input id="edit-build-id" type="hidden">
+                <img id="edit-build-thumbnail-preview" class="thumbnail-preview" />
+                <div class="form-group">
+                    <label for="edit-build-name">Build name:</label>
+                    <input id="edit-build-name"  type="text" class="build-name" maxlength=@MAX_NAME_LENGTH required>
+                </div>
+                <div id="edit-build-thumbnail-grid" class="thumbnail-grid" style="display:none">
+                    <img src="~/media/thumbnails/126px-ascendant_avatar.png" class="thumbnail-option" data-filename="126px-ascendant_avatar.png" />
+                    <img src="~/media/thumbnails/126px-assassin_avatar.png" class="thumbnail-option" data-filename="126px-assassin_avatar.png" />
+                    <img src="~/media/thumbnails/126px-berserker_avatar.png" class="thumbnail-option" data-filename="126px-berserker_avatar.png" />
+                    <img src="~/media/thumbnails/126px-champion_avatar.png" class="thumbnail-option" data-filename="126px-champion_avatar.png" />
+                    <img src="~/media/thumbnails/126px-chieftain_avatar.png" class="thumbnail-option" data-filename="126px-chieftain_avatar.png" />
+                    <img src="~/media/thumbnails/126px-deadeye_avatar.png" class="thumbnail-option" data-filename="126px-deadeye_avatar.png" />
+                    <img src="~/media/thumbnails/126px-elementalist_avatar.png" class="thumbnail-option" data-filename="126px-elementalist_avatar.png" />
+                    <img src="~/media/thumbnails/126px-gladiator_avatar.png" class="thumbnail-option" data-filename="126px-gladiator_avatar.png" />
+                    <img src="~/media/thumbnails/126px-guardian_avatar.png" class="thumbnail-option" data-filename="126px-guardian_avatar.png" />
+                    <img src="~/media/thumbnails/126px-hierophant_avatar.png" class="thumbnail-option" data-filename="126px-hierophant_avatar.png" />
+                    <img src="~/media/thumbnails/126px-inquisitor_avatar.png" class="thumbnail-option" data-filename="126px-inquisitor_avatar.png" />
+                    <img src="~/media/thumbnails/126px-juggernaut_avatar.png" class="thumbnail-option" data-filename="126px-juggernaut_avatar.png" />
+                    <img src="~/media/thumbnails/126px-necromancer_avatar.png" class="thumbnail-option" data-filename="126px-necromancer_avatar.png" />
+                    <img src="~/media/thumbnails/126px-occultist_avatar.png" class="thumbnail-option" data-filename="126px-occultist_avatar.png" />
+                    <img src="~/media/thumbnails/126px-pathfinder_avatar.png" class="thumbnail-option" data-filename="126px-pathfinder_avatar.png" />
+                    <img src="~/media/thumbnails/126px-saboteur_avatar.png" class="thumbnail-option" data-filename="126px-saboteur_avatar.png" />
+                    <img src="~/media/thumbnails/126px-slayer_avatar.png" class="thumbnail-option" data-filename="126px-slayer_avatar.png" />
+                    <img src="~/media/thumbnails/126px-trickster_avatar.png" class="thumbnail-option" data-filename="126px-trickster_avatar.png" />
+                    <img src="~/media/thumbnails/126px-warden_avatar.png" class="thumbnail-option" data-filename="126px-warden_avatar.png" />
+                </div>
+                <div class="form-group">
+                    <label>Thumbnail: </label>
+                    <div class="thumbnail-dropdown">
+                        <label id="edit-toggle-thumbnails" class="thumbnail-button">Select</label>
+                        <label for="edit-build-image" class="thumbnail-button">Upload</label>
+                        <input id="edit-build-image" type="file" accept="image/*" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-isPublic-checkbox">Public:</label>
+                    <input id="edit-isPublic-checkbox" class="form-checkbox" type="checkbox" />
+                </div>
+                <div class="buttons">
+                    <button id="edit-build-submit" type="submit">Update</button>
+                    <button id ="delete-build-button" type="button" class="form-delete-button">Delete</button>
+                    <button id="edit-build-cancel" type="button" onclick="hideEditBuildForm()">Cancel</button>                        
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-url-popup" class="popup-overlay">
+        <div class="popup-content">
+            <h2>New URL</h2>
+            <form id="add-url-form" method="post">
+                <div class="form-group">
+                    <label for="add-url-name">Name:</label>
+                    <input type="text" id="add-url-name" maxlength=@MAX_NAME_LENGTH required>
+                </div>
+                <div class="form-group">
+                    <label class="address-label" for="add-url-address">URL:</label>
+                    <input type="text" id="add-url-address" maxlength=@MAX_URL_LENGTH required>
+                </div>
+                <div class="buttons">
+                    <button id="add-url-submit" type="submit">Create</button>
+                    <button id="add-url-cancel" type="button" onclick="hideAddUrlForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="edit-url-popup" class="popup-overlay">
+        <div class="popup-content">
+            <h2>Edit URL</h2>
+            <form id="edit-url-form" method="post">
+                <input id="hidden-build-url-id" type="hidden">
+                <div class="form-group">
+                    <label for="edit-url-name">Name:</label>
+                    <input id="edit-url-name" type="text" maxlength=@MAX_NAME_LENGTH required>
+                </div>
+                <div class="form-group">
+                    <label class="address-label" for="edit-url-address">URL:</label>
+                    <input id="edit-url-address" type="text" maxlength=@MAX_URL_LENGTH required>
+                </div>
+                <div class="buttons">
+                    <button id="edit-url-submit" type="submit">Update</button>
+                    <button id="delete-url-button" type="button" class="form-delete-button">Delete</button>
+                    <button id="edit-url-cancel" type="button" onclick="hideEditUrlForm()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="upload-reference-image-popup" class="popup-overlay">
+        <div class="popup-content">
+            <h2>Upload Image</h2>
+            <form id="upload-reference-image-form" method="post">
+                <img id="upload-reference-image-thumbnail-preview" class="upload-preview" src="~/media/question-mark.png" />
+                <label id="reference-image-upload-label" for="reference-image-upload" class="thumbnail-button">Choose Image</label>
+                <input type="file" id="reference-image-upload" accept="image/*">
+                <div class="buttons">
+                    <button id="upload-reference-image-submit" type="submit">Upload</button>
+                    <button id="upload-reference-image-cancel" type="button" onclick="hideUploadReferenceImageForm()">Cancel</button>                        
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="confirmModal">
+        <div class="confirmModal-content">
+            <label id="confirm-modal-message" class="confirmModal-message">Are you sure you want to delete this?</label>
+            <div class="buttons">
+                <button id="confirm-modal-confirm">Yes</button>
+                <button id="confirm-modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="build-context-menu">
+        <ul>
+            <li id="context-edit-build">Edit Build</li>
+            <li id="context-copy-build-url">Copy Build URL</li>
+            <li id="context-copy-public-url">Copy Public URL</li>
+        </ul>
+    </div>
+</body>

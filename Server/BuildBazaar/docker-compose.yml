@@ -1,0 +1,63 @@
+version: '3.4'
+
+services:
+  buildbazaarcore:
+    image: ${DOCKER_REGISTRY-}buildbazaarcore
+    build:
+      context: .
+      dockerfile: BuildBazaarCore/Dockerfile
+    networks:
+      - bazaarnet
+    environment:
+        AWS_REGION: us-east-1
+        ENVIRONMENT: local
+        REGION: us-east-1
+        DB_HOST: db
+        DB_PORT: 3306
+        DB_NAME: BuildBazaarDB
+        DB_USERNAME: root
+        DB_PASSWORD: password
+        JWT_ISSUER: BuildBazaar
+        JWT_AUDIENCE: BuildBazaar
+        SECRET_KEY: SECRETKEYSECRETKEYSECRETKEYSECRE
+        BUCKET_NAME: X
+        CLOUDFRONT_PRIVATE_KEY: X
+        CLOUDFRONT_KEY_PAIR_ID: X
+        CLOUDFRONT_DISTRIBUTION_DOMAIN: X
+  #Database
+  db:
+    platform: linux/x86_64
+    image: mysql:5.7
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db:/docker-entrypoint-initdb.d/
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: BuildBazaarDB
+      MYSQL_PASSWORD: password
+    networks:
+      - bazaarnet
+
+  # phpmyadmin
+  phpmyadmin:
+    depends_on:
+      - db
+    image: phpmyadmin
+    restart: always
+    ports:
+      - "8090:80"
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: password
+    networks:
+      - bazaarnet
+
+networks:
+  bazaarnet:
+    name: bazaarnet
+
+volumes:
+  db_data:
