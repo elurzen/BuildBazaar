@@ -1,4 +1,5 @@
-﻿using BuildBazaarCore.Models;
+﻿using Amazon.S3.Model;
+using BuildBazaarCore.Models;
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 using System.Data.Common;
@@ -8,9 +9,10 @@ namespace BuildBazaarCore.Services
 {
     public interface IBuildUrlService
     {
-        Task <IActionResult> UpdateBuildUrl(uint? buildUrlID, uint buildID, string buildUrl, string buildUrlName);
-        Task <IActionResult> GetBuildUrls(uint buildID, bool isPublic, JwtSecurityToken token);
-        Task <IActionResult> DeleteBuildUrl(uint buildUrlID);
+        Task<IActionResult> GetBuildUrls(uint buildID, JwtSecurityToken token);
+        Task<IActionResult> CreateBuildUrl(uint buildID, string buildUrl, string buildUrlName, JwtSecurityToken token);
+        Task <IActionResult> UpdateBuildUrl(uint? buildUrlID, uint buildID, string buildUrl, string buildUrlName, JwtSecurityToken token);
+        Task <IActionResult> DeleteBuildUrl(uint buildUrlID, JwtSecurityToken token);
     }
     public class BuildUrlService : BaseService, IBuildUrlService
     {
@@ -23,102 +25,31 @@ namespace BuildBazaarCore.Services
             _buildService = buildService;
         }
 
-        public async Task<IActionResult> UpdateBuildUrl(uint? buildUrlID, uint buildID, string buildUrl, string buildUrlName)
+        public async Task<IActionResult> GetBuildUrls(uint buildID, JwtSecurityToken token)
         {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-                {
-                    connection.Open();
-                    string query = string.Empty;
-
-                    if (buildUrlID == null)
-                    {
-                        // Create new record
-                        query = "INSERT INTO BuildUrls (buildID, buildUrl, buildUrlName) VALUES (@buildID, @buildUrl, @buildUrlName);";
-                    }
-                    else
-                    {
-                        // Update existing record
-                        query = "UPDATE BuildUrls SET buildUrl = @buildUrl, buildUrlName = @buildUrlName WHERE buildUrlID = @buildUrlID;";
-                    }
-
-                    if (!buildUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !buildUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                    {
-                        buildUrl = "https://" + buildUrl;
-                    }
-
-                    using (MySqlCommand command = new MySqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@buildUrl", buildUrl);
-                        command.Parameters.AddWithValue("@buildUrlName", buildUrlName);
-
-                        if (buildUrlID != null)
-                        {
-                            command.Parameters.AddWithValue("@buildUrlID", buildUrlID);
-                        }
-                        else
-                        {
-                            command.Parameters.AddWithValue("@buildID", buildID);
-                        }
-
-                        int rowsAffected = await command.ExecuteNonQueryAsync();
-                        if (rowsAffected > 0)
-                        {
-                            if (buildUrlID == null)
-                            {
-                                buildUrlID = Convert.ToUInt32(command.LastInsertedId);
-                            }
-                            return Json(new
-                            {
-                                success = true,
-                                buildUrl = new
-                                {
-                                    buildUrlID,
-                                    buildID,
-                                    buildUrl,
-                                    buildUrlName
-                                }
-                            });
-                        }
-                        else
-                        {
-                            return Json(new { success = false, errorMessage = "No records updated." });
-                        }
-                    }
-                }
-            }
-            catch (MySqlException ex)
-            {
-                return Json(new { success = false, errorMessage = ex.Message });
-            }
-        }
-
-        public async Task<IActionResult> GetBuildUrls(uint buildID, bool isPublic, JwtSecurityToken token)
-        {
-            var (success, validBuildID, errorMessage) = await _buildService.getBuildID(buildID, isPublic, token);
-
-            if (!success)
-            {
-                return Json(new { success = false, errorMessage });
-            }
             try
             {
                 List<BuildUrlModel> buildUrls = new List<BuildUrlModel>();
+                uint userIDClaim = getUserIDFromToken(token);
+                bool isPublic = false;
 
                 using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
                 {
                     await connection.OpenAsync();
-                    string query = "SELECT buildUrlID, buildID, buildUrlName, buildUrl FROM BuildUrls WHERE buildID = @buildID";
+                    string query = "SELECT * FROM BuildUrls WHERE buildID = @buildID";
 
                     using (MySqlCommand command = new MySqlCommand(query, connection))
                     {
-                        command.Parameters.AddWithValue("@buildID", validBuildID);
+                        command.Parameters.AddWithValue("@buildID", buildID);
 
                         using (DbDataReader reader = await command.ExecuteReaderAsync())
-                        {
                             while (await reader.ReadAsync())
                             {
+                                isPublic = Convert.ToBoolean(reader["isPublic"]);
+                                if (!isPublic && userIDClaim != Convert.ToUInt32(reader["userID"]))
+                                {
+                                    continue;
+                                }
                                 BuildUrlModel buildUrl = new BuildUrlModel
                                 {
                                     buildUrlID = Convert.ToUInt32(reader["buildUrlID"]),
@@ -128,7 +59,6 @@ namespace BuildBazaarCore.Services
                                 };
                                 buildUrls.Add(buildUrl);
                             }
-                        }
                     }
                 }
 
@@ -140,29 +70,142 @@ namespace BuildBazaarCore.Services
             }
         }
 
-        public async Task<IActionResult> DeleteBuildUrl(uint buildUrlID)
+        public async Task<IActionResult> CreateBuildUrl(uint buildID, string buildUrl, string buildUrlName, JwtSecurityToken token)
         {
             try
             {
+                uint userIDClaim = getUserIDFromToken(token);
+                bool isPublic = false;
+
+                if (!buildUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !buildUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    buildUrl = "https://" + buildUrl;
+                }
+
+                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+                {
+                    connection.Open();
+
+                    string query = "SELECT UserID, isPublic FROM Builds WHERE BuildID = @buildID";
+                    using (MySqlCommand command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@buildID", buildID);
+                        using (DbDataReader reader = await command.ExecuteReaderAsync())
+                        {
+                            if (!await reader.ReadAsync())
+                            {
+                                return Json(new { success = false, errorMessage = "Build not found." });
+                            }
+
+                            uint userID = Convert.ToUInt32(reader["UserID"]);
+                            isPublic = Convert.ToBoolean(reader["isPublic"]);
+
+                            if (userID != userIDClaim)
+                            {
+                                return Json(new { success = false, errorMessage = "Unauthorized access." });
+                            }
+                        }
+                    }
+
+                    query = "INSERT INTO BuildUrls (buildID, buildUrl, buildUrlName, userID, isPublic) " +
+                        "VALUES (@buildID, @buildUrl, @buildUrlName, @userID, @isPublic);";
+                    using (MySqlCommand command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@buildID", buildID);
+                        command.Parameters.AddWithValue("@buildUrl", buildUrl);
+                        command.Parameters.AddWithValue("@buildUrlName", buildUrlName);
+                        command.Parameters.AddWithValue("@userID", userIDClaim);
+                        command.Parameters.AddWithValue("@isPublic", isPublic);
+
+                        await command.ExecuteNonQueryAsync();
+
+                        uint buildUrlID  = Convert.ToUInt32(command.LastInsertedId);
+                        return Json(new
+                        {
+                            success = true,
+                            buildUrl = new
+                            {
+                                buildUrlID,
+                                buildID,
+                                buildUrl,
+                                buildUrlName
+                            }
+                        });
+                    }
+
+                }
+            }
+            catch (MySqlException ex)
+            {
+                return Json(new { success = false, errorMessage = ex.Message });
+            }
+        }
+
+        public async Task<IActionResult> UpdateBuildUrl(uint? buildUrlID, uint buildID, string buildUrl, string buildUrlName, JwtSecurityToken token)
+        {
+            try
+            {
+                uint userIDClaim = getUserIDFromToken(token);
+
+                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+                {
+                    connection.Open();
+                    string query = "UPDATE BuildUrls SET buildUrl = @buildUrl, buildUrlName = @buildUrlName WHERE buildUrlID = @buildUrlID AND userID = @userID;";
+
+                    if (!buildUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !buildUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        buildUrl = "https://" + buildUrl;
+                    }
+
+                    using (MySqlCommand command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@buildUrlID", buildUrlID);
+                        command.Parameters.AddWithValue("@buildUrl", buildUrl);
+                        command.Parameters.AddWithValue("@buildUrlName", buildUrlName);
+                        command.Parameters.AddWithValue("@userID", userIDClaim);
+
+                        await command.ExecuteNonQueryAsync();                        
+                        buildUrlID = Convert.ToUInt32(command.LastInsertedId);
+                        
+                        return Json(new
+                        {
+                            success = true,
+                            buildUrl = new
+                            {
+                                buildUrlID,
+                                buildID,
+                                buildUrl,
+                                buildUrlName
+                            }
+                        });
+                    }
+                }
+            }
+            catch (MySqlException ex)
+            {
+                return Json(new { success = false, errorMessage = ex.Message });
+            }
+        }
+
+        public async Task<IActionResult> DeleteBuildUrl(uint buildUrlID, JwtSecurityToken token)
+        {
+            try
+            {
+                uint userIDClaim = getUserIDFromToken(token);
                 using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
                 {
                     connection.Open();
 
                     // Delete the record from the database
-                    string query = "DELETE FROM BuildUrls WHERE buildUrlID = @buildUrlID;";
+                    string query = "DELETE FROM BuildUrls WHERE buildUrlID = @buildUrlID AND userID = @userID;";
                     using (MySqlCommand command = new MySqlCommand(query, connection))
                     {
                         command.Parameters.AddWithValue("@buildUrlID", buildUrlID);
+                        command.Parameters.AddWithValue("@userID", userIDClaim);
 
-                        int rowsAffected = await command.ExecuteNonQueryAsync();
-                        if (rowsAffected > 0)
-                        {
-                            return Json(new { success = true });
-                        }
-                        else
-                        {
-                            return Json(new { success = false, errorMessage = "No records deleted." });
-                        }
+                        await command.ExecuteNonQueryAsync();
+
+                        return Json(new { success = true });
                     }
                 }
             }

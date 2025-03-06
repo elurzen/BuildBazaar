@@ -49,9 +49,9 @@ async function populateBuilds() {
                         history.replaceState(null, '', `/Builds/${buildID}`);
                         $('#sidebar-build-list li').removeClass('selected-build');
                         $(this).addClass('selected-build');
-                        populateNote(false);
-                        populateReferenceImages(false);
-                        populateBuildUrls(false);
+                        populateNote();
+                        populateReferenceImages();
+                        populateBuildUrls();
                         $('#main-row').removeClass('hidden-children');
                     }
                 });
@@ -84,9 +84,9 @@ async function populateBuilds() {
             else {
                 $('#main-row').removeClass('hidden-children');
             }
-            populateNote(false);
-            populateReferenceImages(false);
-            populateBuildUrls(false);
+            populateNote();
+            populateReferenceImages();
+            populateBuildUrls();
         })
         .fail(function (xhr, status, error) {
             toastr.error('Failed fetching builds');
@@ -124,9 +124,6 @@ function initAddBuildForm() {
                 $('#add-build-thumbnail-preview').attr('src', '/media/question-mark.png');
                 return;
             }
-            //resizeImage(image, function (resizedImage) {
-            //    formData.append('image', resizedImage);
-            //});
             formData.append('image', image);
         } else if (selectedThumbnail) {
             // If a default thumbnail is selected, add it to form data
@@ -499,7 +496,7 @@ function initAddUrlForm() {
 
         disableForm('#add-url-form');
         $.ajax({
-            url: '/BuildData/UpdateBuildUrl',
+            url: '/BuildData/CreateBuildUrl',
             headers: {
                 Authorization: userToken
             },
@@ -669,37 +666,37 @@ function initNotesButtons() {
         var userToken = localStorage.getItem('token');
         if (userToken == null) {
             window.location.href = '/';
+            return;
         }
-        else {
-            $.ajax({
-                type: 'POST',
-                url: '/BuildData/SetNote',
-                headers: {
-                    Authorization: userToken
-                },
-                data: {
-                    buildID: localStorage.buildID,
-                    noteContent: notes[0].innerText //.text() doesnt preserve new line chars .html() throws security error
+
+        $.ajax({
+            type: 'POST',
+            url: '/BuildData/SetNote',
+            headers: {
+                Authorization: userToken
+            },
+            data: {
+                buildID: localStorage.buildID,
+                noteContent: notes[0].innerText //.text() doesnt preserve new line chars .html() throws security error
+            }
+        })
+            .done(function (result) {
+                if (!result.success) {
+                    toastr.error(result.errorMessage);
+                    return;
                 }
+                editButton.show();
+                cancelButton.hide();
+                saveButton.hide();
+                notes.attr('contenteditable', 'false');
             })
-                .done(function (result) {
-                    if (!result.success) {
-                        toastr.error(result.errorMessage);
-                        return;
-                    }
-                    editButton.show();
-                    cancelButton.hide();
-                    saveButton.hide();
-                    notes.attr('contenteditable', 'false');
-                })
-                .fail(function (xhr, status, error) {
-                    toastr.error('An error occurred while saving the note');
-                    console.log(`Error: ${error}`);
-                })
-                .always(function () {
-                    saveButton.prop('disabled', false);
-                });
-        }
+            .fail(function (xhr, status, error) {
+                toastr.error('An error occurred while saving the note');
+                console.log(`Error: ${error}`);
+            })
+            .always(function () {
+                saveButton.prop('disabled', false);
+            });
     });
 }
 

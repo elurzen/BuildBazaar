@@ -1,4 +1,4 @@
-﻿function populateNote(isPublic) {
+﻿function populateNote() {
     if (!localStorage.buildID) {
         return;
     }
@@ -12,8 +12,7 @@
             Authorization: userToken
         },
         data: {
-            buildID: localStorage.buildID,
-            isPublic: isPublic
+            buildID: localStorage.buildID
         },
     })
         .done(function (result) {
@@ -27,7 +26,7 @@
                 type: 'GET',
                 url: noteFileUrl,
                 success: function (fileContents) {
-                    document.getElementById("notes").innerText = fileContents; //Done with vanilla js for easy solution to maintaining newline characters
+                    document.getElementById("notes").innerText = fileContents; 
                     
                 },
                 error: function (xhr, status, error) {
@@ -42,7 +41,7 @@
         });
 }
 
-function populateBuildUrls(isPublic) {
+function populateBuildUrls() {
     if (!localStorage.buildID) {
         return;
     }
@@ -56,8 +55,7 @@ function populateBuildUrls(isPublic) {
             Authorization: userToken
         },
         data: {
-            buildID: localStorage.buildID,
-            isPublic: isPublic
+            buildID: localStorage.buildID
         }
     })
         .done(function (result) {
@@ -71,7 +69,7 @@ function populateBuildUrls(isPublic) {
             dropdownContent.empty(); // Clear any existing options
 
             // Add the "Create New" option at the top
-            if (!isPublic) {
+            if (editable) {
                 var createNewOption = $('<div>')
                     .addClass('dropdown-item create-new')
                     .text('Create New URL')
@@ -188,7 +186,7 @@ function getSelectedUrlForBuild(buildID) {
     return buildSelections[buildID]; // returns undefined if no selection
 }
 
-function populateReferenceImages(isPublic) {
+function populateReferenceImages() {
     if (localStorage.buildID == null) {
         return;
     }
@@ -203,7 +201,6 @@ function populateReferenceImages(isPublic) {
         },
         data: {
             buildID: localStorage.buildID,
-            isPublic: isPublic
         },
     })
         .done(async function (result) {
@@ -237,7 +234,7 @@ function populateReferenceImages(isPublic) {
                 var expandImage = $('<img>').addClass('expand-button').data('imageElement', img);
 
                 wrapperDiv.append(img);
-                if (isPublic) {
+                if (window.location.pathname.includes('/Public')) {
                     expandImage.addClass('public');
                 }
                 else {
@@ -258,8 +255,6 @@ function populateReferenceImages(isPublic) {
                 expandImage.on('click', function (event) {
                     event.stopPropagation();
                     showImageModal(record.imageID, record.filePath);
-                    //var imgElement = $(this).data('imageElement');
-                    //showImageModal(imgElement.attr('src'));
                 });
 
                 img.on('dblclick', function (event) {
@@ -303,12 +298,10 @@ async function showImageModal(imageID, filePath) {
     populateImageCache([{ imageID: imageID, filePath: filePath }])
     let cachedFilePath = await getCachedImageUrl(filePath) || '/media/question-mark.png';
     var modalContent = $('<img>').attr('src', cachedFilePath).addClass('imageModal-content');
-    //var modalContent = $('<img>').attr('src', imageUrl).addClass('imageModal-content');
     var closeModal = $('<span>').addClass('close-imageModal').html('&times;');
 
     $('body').addClass('noscroll');
 
-    //modalContent.append(closeModal);
     // Append elements to the modal
     modal.append(modalContent, closeModal);
 
@@ -500,8 +493,6 @@ async function populateImageCache(records) {
                     toastr.error(result.errorMessage);
                 }
                 result.urls.forEach((urlObj) => {
-                    //localStorage.setItem(urlObj.filePath, urlObj.url)
-                    //storeInCache(urlObj.filePath, urlObj.url);
                     cacheImageUrl(urlObj.filePath, urlObj.url);
                 })
             })

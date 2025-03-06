@@ -14,7 +14,7 @@ namespace BuildBazaarCore.Controllers
 
         protected JwtSecurityToken ValidateToken()
         {
-            var token = Request.Headers["Authorization"].ToString();//.Replace("Bearer ", "");
+            var token = Request.Headers["Authorization"].ToString();
             return _userService.ValidateToken(token);
         }
     }

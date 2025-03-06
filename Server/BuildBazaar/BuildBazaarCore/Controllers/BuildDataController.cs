@@ -29,10 +29,10 @@ namespace BuildBazaarCore.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> GetNote(uint buildID, bool isPublic)
+        public async Task<IActionResult> GetNote(uint buildID)
         {
             JwtSecurityToken token = ValidateToken();
-            return await _noteService.GetNote(buildID, isPublic, token);
+            return await _noteService.GetNote(buildID, token);
         }
 
         [HttpPost]
@@ -44,8 +44,27 @@ namespace BuildBazaarCore.Controllers
                 return Json(new { success = false, errorMessage = "Invalid Token." });
             }
 
-            return await _noteService.SetNote(buildID, noteContent);
+            return await _noteService.SetNote(buildID, noteContent, token);
 
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetBuildUrls(uint buildID)
+        {
+            JwtSecurityToken token = ValidateToken();
+            return await _buildUrlService.GetBuildUrls(buildID, token);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateBuildUrl(uint buildID, string buildUrl, string buildUrlName)
+        {
+            JwtSecurityToken token = ValidateToken();
+            if (token == null)
+            {
+                return Json(new { success = false, errorMessage = "Invalid Token." });
+            }
+
+            return await _buildUrlService.CreateBuildUrl(buildID, buildUrl, buildUrlName, token);
         }
 
         [HttpPost]
@@ -57,14 +76,7 @@ namespace BuildBazaarCore.Controllers
                 return Json(new { success = false, errorMessage = "Invalid Token." });
             }
 
-            return await _buildUrlService.UpdateBuildUrl(buildUrlID, buildID, buildUrl, buildUrlName);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> GetBuildUrls(uint buildID, bool isPublic)
-        {
-            JwtSecurityToken token = ValidateToken();
-            return await _buildUrlService.GetBuildUrls(buildID, isPublic, token);
+            return await _buildUrlService.UpdateBuildUrl(buildUrlID, buildID, buildUrl, buildUrlName, token);
         }
 
         [HttpPost]
@@ -76,7 +88,15 @@ namespace BuildBazaarCore.Controllers
                 return Json(new { success = false, errorMessage = "Invalid Token." });
             }
 
-            return await _buildUrlService.DeleteBuildUrl(buildUrlID);
+            return await _buildUrlService.DeleteBuildUrl(buildUrlID, token);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetReferenceImages(uint buildID)
+        {
+            JwtSecurityToken token = ValidateToken();
+
+            return await _referenceImageService.GetReferenceImages(buildID, token);
         }
 
         [HttpPost]
@@ -102,15 +122,7 @@ namespace BuildBazaarCore.Controllers
             int buildID = int.Parse(Request.Form["buildID"]);
 
             return await _referenceImageService.UploadReferenceImage(file, buildID, token);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> GetReferenceImages(uint buildID, bool isPublic)
-        {
-            JwtSecurityToken token = ValidateToken();
-
-            return await _referenceImageService.GetReferenceImages(buildID, isPublic, token);
-        }
+        }        
 
         [HttpPost]
         public async Task<IActionResult> SaveImageOrder([FromBody] ImageOrderRequest request)

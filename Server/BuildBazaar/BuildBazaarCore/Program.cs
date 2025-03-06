@@ -21,6 +21,7 @@ builder.Services.AddScoped<IBuildService, BuildService>();
 builder.Services.AddScoped<INoteService, NoteService>();
 builder.Services.AddScoped<IBuildUrlService, BuildUrlService>();
 builder.Services.AddScoped<IReferenceImageService, ReferenceImageService>();
+builder.Services.AddScoped<IImageProcessingService, ImageProcessingService>();
 
 // ==============================
 // Configure Middleware Services

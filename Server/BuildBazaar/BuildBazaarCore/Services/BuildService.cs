@@ -16,14 +16,13 @@ namespace BuildBazaarCore.Services
 {
     public interface IBuildService
     {
+        Task<IActionResult> GetBuilds(JwtSecurityToken token);
+        Task<IActionResult> GetPublicBuilds(string userName, JwtSecurityToken token);
         Task<IActionResult> CreateBuild(BuildModel build, IFormFile file, string thumbnail, JwtSecurityToken token);
         Task CreateExampleBuild(int userID, MySqlConnection connection);
         Task<IActionResult> EditBuild(BuildModel build, IFormFile file, string thumbnail, JwtSecurityToken token);
         Task<IActionResult> CopyBuild(int originalBuildID, JwtSecurityToken token);
-        Task<IActionResult> DeleteBuild(int buildID, JwtSecurityToken token);
-        Task<IActionResult> GetBuilds(JwtSecurityToken token);
-        Task<IActionResult> GetPublicBuilds(string userName, JwtSecurityToken token);
-        Task<(bool success, int buildID, string errorMessage)> getBuildID(uint buildID, bool isPublic, JwtSecurityToken token);
+        Task<IActionResult> DeleteBuild(int buildID, JwtSecurityToken token);        
     }
 
     public class BuildService : BaseService, IBuildService
@@ -32,18 +31,135 @@ namespace BuildBazaarCore.Services
         private readonly IConfigService _configService;
         private readonly IAwsService _awsService;
         private readonly IAmazonS3 _s3Client;
+        private readonly IImageProcessingService _imageProcessingService;
         
 
         public BuildService(IWebHostEnvironment webHostEnvironment,
                            IConfigService configService,
                            IAwsService awsService,
-                           IAmazonS3 s3Client)
+                           IAmazonS3 s3Client,
+                           IImageProcessingService imageProcessingService)
         {
             _webHostEnvironment = webHostEnvironment;
             _configService = configService;
             _awsService = awsService;
             _s3Client = s3Client;
+            _imageProcessingService = imageProcessingService;
                       
+        }
+
+        public async Task<IActionResult> GetBuilds(JwtSecurityToken token)
+        {
+            try
+            {
+                List<BuildModel> builds = new List<BuildModel>();
+                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+                {
+                    uint userIDClaim = getUserIDFromToken(token);
+                    connection.Open();
+                    string query = "SELECT * FROM Images Join Builds ON Images.buildID = Builds.buildID WHERE Images.userID = @userID AND Images.typeID = 1";
+
+                    using (MySqlCommand command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@userID", userIDClaim);
+                        using (DbDataReader reader = await command.ExecuteReaderAsync())
+                            while (reader.Read())
+                            {
+                                BuildModel build = new BuildModel();
+                                build.buildID = Convert.ToUInt32(reader["buildID"]);
+                                build.userID = Convert.ToUInt32(reader["userID"]);
+                                build.imageID = Convert.ToUInt32(reader["imageID"]);
+                                build.buildName = reader["buildName"].ToString();
+                                build.isPublic = Convert.ToBoolean(reader["isPublic"]);
+                                build.filePath = reader["filePath"].ToString();
+
+                                builds.Add(build);
+                            }
+                    }
+                }
+                return Json(new { success = true, builds });
+            }
+            catch (MySqlException ex)
+            {
+                return Json(new { success = false, errorMessage = ex.Message });
+            }
+        }
+
+        public async Task<IActionResult> GetPublicBuilds(string userName, JwtSecurityToken token)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(userName) && !Regex.IsMatch(userName, "^[a-zA-Z0-9_.-]+$"))
+                {
+                    return Json(new { success = false, errorMessage = "Invalid username format" });
+                }
+                uint userID;
+                List<BuildModel> builds = new List<BuildModel>();
+                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+                {
+                    connection.Open();
+
+                    if (!string.IsNullOrEmpty(userName))
+                    {
+                        string userQuery = "SELECT userID FROM Users WHERE Users.Username = @userName LIMIT 1";
+                        using (MySqlCommand command = new MySqlCommand(userQuery, connection))
+                        {
+                            command.Parameters.AddWithValue("@userName", userName);
+                            var result = await command.ExecuteScalarAsync();
+
+                            if (result == null)
+                            {
+                                return Json(new { success = false, errorMessage = "Invalid request" });
+                            }
+                            userID = Convert.ToUInt32(result);
+                        }
+                    }
+                    else
+                    {
+                        if (token == null)
+                        {
+                            return Json(new { success = false, errorMessage = "Log in or specify a user" });
+                        }
+                        userID = getUserIDFromToken(token);
+                        string userQuery = "SELECT userName FROM Users WHERE Users.userID = @userID LIMIT 1";
+                        using (MySqlCommand command = new MySqlCommand(userQuery, connection))
+                        {
+                            command.Parameters.AddWithValue("@userID", userID);
+                            var result = await command.ExecuteScalarAsync();
+
+                            if (result == null)
+                            {
+                                return Json(new { success = false, errorMessage = "Invalid request" });
+                            }
+                            userName = result.ToString();
+                        }
+                    }
+
+                    string imageQuery = "SELECT * FROM Images Join Builds ON Images.buildID = Builds.buildID WHERE Images.userID = @userID AND Images.typeID = 1 AND Builds.isPublic = 1";
+                    using (MySqlCommand command = new MySqlCommand(imageQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@userID", userID);
+                        using (DbDataReader reader = await command.ExecuteReaderAsync())
+                            while (reader.Read())
+                            {
+                                BuildModel build = new BuildModel();
+                                build.buildID = Convert.ToUInt32(reader["buildID"]);
+                                build.userID = Convert.ToUInt32(reader["userID"]);
+                                build.imageID = Convert.ToUInt32(reader["imageID"]);
+                                build.buildName = reader["buildName"].ToString();
+                                build.isPublic = Convert.ToBoolean(reader["isPublic"]);
+                                build.filePath = reader["filePath"].ToString();
+
+                                builds.Add(build);
+                            }
+                    }
+                }
+                return Json(new { success = true, builds, userName = userName });
+            }
+            catch (MySqlException ex)
+            {
+                return Json(new { success = false, errorMessage = ex.Message });
+            }
         }
 
         public async Task<IActionResult> CreateBuild(BuildModel build, IFormFile file, string thumbnail, JwtSecurityToken token)
@@ -52,7 +168,7 @@ namespace BuildBazaarCore.Services
 
             using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
             {
-                var userIDClaim = token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                uint userIDClaim = getUserIDFromToken(token);
                 await connection.OpenAsync();
 
                 using (var transaction = await connection.BeginTransactionAsync())
@@ -73,14 +189,16 @@ namespace BuildBazaarCore.Services
 
                         if (file != null && file.Length > 0)
                         {
-
                             var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
-                            s3ImageFilePath = Path.Combine("Users", userIDClaim, "Thumbnails", imageFileName);
-                            using (var memoryStream = new MemoryStream())
+                            s3ImageFilePath = Path.Combine("Users", userIDClaim.ToString(), "Thumbnails", imageFileName);
+
+                            using (var memoryStream = await _imageProcessingService.ResizeAndStripExif(file, 125, 125, true))
                             {
-                                await file.CopyToAsync(memoryStream);
-                                memoryStream.Position = 0; // Reset stream position after copy
-                                await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath);
+                                if (_configService.GetEnvironment() != "local")
+                                {
+                                    // Upload the clean image to S3
+                                    await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath);
+                                }
                                 s3Objects.Add(s3ImageFilePath);
                             }
                         }
@@ -92,13 +210,16 @@ namespace BuildBazaarCore.Services
                             {
                                 // Generate a unique file name for the thumbnail copy
                                 var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(selectedThumbnailPath);
-                                s3ImageFilePath = Path.Combine("Users", userIDClaim, "Thumbnails", imageFileName);
+                                s3ImageFilePath = Path.Combine("Users", userIDClaim.ToString(), "Thumbnails", imageFileName);
 
                                 // Copy the default thumbnail and upload it to the user's S3 folder
                                 using (var memoryStream = new MemoryStream(await System.IO.File.ReadAllBytesAsync(selectedThumbnailPath)))
                                 {
                                     memoryStream.Position = 0;
-                                    await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath); // S3 upload method
+                                    if (_configService.GetEnvironment() != "local")
+                                    {
+                                        await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath); // S3 upload method
+                                    }
                                     s3Objects.Add(s3ImageFilePath);
                                 }
                             }
@@ -108,30 +229,35 @@ namespace BuildBazaarCore.Services
                             return Json(new { success = false, errorMessage = "Selected thumbnail not found." });
                         }
 
-
-                        var imageQuery = "INSERT INTO Images (filePath, typeID, buildID, imageOrder, userID) VALUES (@filePath, 1, @buildID, 0, @userID); SELECT LAST_INSERT_ID()";
+                        var imageQuery = "INSERT INTO Images (filePath, typeID, buildID, imageOrder, userID, isPublic) VALUES (@filePath, 1, @buildID, 0, @userID, @isPublic); SELECT LAST_INSERT_ID()";
                         using (MySqlCommand command = new MySqlCommand(imageQuery, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@filePath", s3ImageFilePath);
                             command.Parameters.AddWithValue("@buildID", buildID);
                             command.Parameters.AddWithValue("@userID", userIDClaim);
+                            command.Parameters.AddWithValue("@isPublic", build.isPublic);
                             await command.ExecuteNonQueryAsync();
                         }
 
                         string defaultNoteContent = $"{build.buildName} notes here!";
-                        var s3NoteFilePath = Path.Combine("Users", userIDClaim, buildID.ToString(), "notes.txt");
-                        var noteQuery = "INSERT INTO Notes (filePath, buildID) VALUES (@filePath, @buildID); SELECT LAST_INSERT_ID()";
+                        var s3NoteFilePath = Path.Combine("Users", userIDClaim.ToString(), buildID.ToString(), "notes.txt");
+                        var noteQuery = "INSERT INTO Notes (filePath, buildID, userID, isPublic) VALUES (@filePath, @buildID, @userID, @isPublic); SELECT LAST_INSERT_ID()";
                         using (MySqlCommand command = new MySqlCommand(noteQuery, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@filePath", s3NoteFilePath);
                             command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            command.Parameters.AddWithValue("@isPublic", build.isPublic);
                             await command.ExecuteNonQueryAsync();
                         }
 
                         using (var memoryStream = new MemoryStream(Encoding.UTF8.GetBytes(defaultNoteContent)))
                         {
                             memoryStream.Position = 0; // Reset stream position after copy
-                            await _awsService.UploadStreamToS3(memoryStream, s3NoteFilePath);
+                            if (_configService.GetEnvironment() != "local")
+                            {
+                                await _awsService.UploadStreamToS3(memoryStream, s3NoteFilePath);
+                            }
                             s3Objects.Add(s3NoteFilePath);
                         }
                         await transaction.CommitAsync();
@@ -140,7 +266,10 @@ namespace BuildBazaarCore.Services
                     catch (Exception ex)
                     {
                         await transaction.RollbackAsync();
-                        await _awsService.DeleteFilesFromS3(s3Objects);
+                        if (_configService.GetEnvironment() != "local")
+                        {
+                            await _awsService.DeleteFilesFromS3(s3Objects);
+                        }
                         return Json(new { success = false, errorMessage = ex.Message });
                     }
                 }
@@ -174,10 +303,15 @@ namespace BuildBazaarCore.Services
                     var s3UserThumbnailFilePath = $"Users/{userID}/Thumbnails/{userImageFileName}";
                     var s3NoteFilePath = $"Users/{userID}/{buildID}/notes.txt";
 
-                    var s3UserThumbnailUrl = await _awsService.UploadFileToS3(localExampleThumbnailFilePath, s3UserThumbnailFilePath);
-                    s3Objects.Add(s3UserThumbnailUrl);
 
-                    var imageQuery = "INSERT INTO Images (filePath, imageOrder, typeID, buildID, userID) VALUES (@filePath, 0, 1, @buildID, @userID)";
+                    if (_configService.GetEnvironment() != "local")
+                    {
+                        var s3UserThumbnailUrl = await _awsService.UploadFileToS3(localExampleThumbnailFilePath, s3UserThumbnailFilePath);
+                        s3Objects.Add(s3UserThumbnailUrl);
+                    }
+                    
+
+                    var imageQuery = "INSERT INTO Images (filePath, imageOrder, typeID, buildID, userID, isPublic) VALUES (@filePath, 0, 1, @buildID, @userID, 0)";
                     using (MySqlCommand command = new MySqlCommand(imageQuery, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@filePath", s3UserThumbnailFilePath);
@@ -186,13 +320,18 @@ namespace BuildBazaarCore.Services
                         await command.ExecuteNonQueryAsync();
                     }
 
-                    var s3NotesUrl = await _awsService.UploadFileToS3(fullExampleNotesFilePath, s3NoteFilePath);
+                    if (_configService.GetEnvironment() != "local")
+                    {
+                        var s3NotesUrl = await _awsService.UploadFileToS3(fullExampleNotesFilePath, s3NoteFilePath);
+                    }
+                        
                     s3Objects.Add(s3NoteFilePath);
-                    var noteQuery = "INSERT INTO Notes (filePath, buildID) VALUES (@filePath, @buildID)";
+                    var noteQuery = "INSERT INTO Notes (filePath, buildID, userID, isPublic) VALUES (@filePath, @buildID, @userID, 0)";
                     using (MySqlCommand command = new MySqlCommand(noteQuery, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@filePath", s3NoteFilePath);
                         command.Parameters.AddWithValue("@buildID", buildID);
+                        command.Parameters.AddWithValue("@userID", userID);
                         await command.ExecuteNonQueryAsync();
                     }
 
@@ -208,12 +347,13 @@ namespace BuildBazaarCore.Services
                         var url = columns[1].Trim();
 
                         // Insert into database
-                        var query = "INSERT INTO BuildUrls (buildUrlName, buildUrl, buildID) VALUES (@buildUrlName, @buildUrl, @buildID)";
+                        var query = "INSERT INTO BuildUrls (buildUrlName, buildUrl, buildID, userID, isPublic) VALUES (@buildUrlName, @buildUrl, @buildID, @userID, 0)";
                         using (var command = new MySqlCommand(query, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@buildUrlName", name);
                             command.Parameters.AddWithValue("@buildUrl", url);
                             command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userID);
                             await command.ExecuteNonQueryAsync();
                         }
                     }
@@ -225,10 +365,13 @@ namespace BuildBazaarCore.Services
                     {
                         var fileName = $"{Guid.NewGuid()}{Path.GetExtension(filePath)}";
                         var s3ImageFilePath = $"{shortUserBuildImagesFilePath}{fileName}";
-                        var s3ImageUrl = await _awsService.UploadFileToS3(filePath, s3ImageFilePath);
+                        if (_configService.GetEnvironment() != "local")
+                        {
+                             var s3ImageUrl = await _awsService.UploadFileToS3(filePath, s3ImageFilePath);
+                        }
                         s3Objects.Add(s3ImageFilePath);
 
-                        imageQuery = "INSERT INTO Images (filePath, imageOrder, typeID, buildID, userID) VALUES (@filePath, @imageOrder, 2, @buildID, @userID)";
+                        imageQuery = "INSERT INTO Images (filePath, imageOrder, typeID, buildID, userID, isPublic) VALUES (@filePath, @imageOrder, 2, @buildID, @userID, 0)";
                         using (MySqlCommand command = new MySqlCommand(imageQuery, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@filePath", s3ImageFilePath);
@@ -246,7 +389,10 @@ namespace BuildBazaarCore.Services
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    await _awsService.DeleteFilesFromS3(s3Objects);
+                    if (_configService.GetEnvironment() != "local")
+                    {
+                        await _awsService.DeleteFilesFromS3(s3Objects);
+                    }
                     throw;
                 }
             }
@@ -257,7 +403,7 @@ namespace BuildBazaarCore.Services
             List<String> s3Objects = new List<String>();
             using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
             {
-                var userIDClaim = token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                uint userIDClaim = getUserIDFromToken(token);
                 await connection.OpenAsync();
 
                 using (var transaction = await connection.BeginTransactionAsync())
@@ -265,102 +411,143 @@ namespace BuildBazaarCore.Services
                     try
                     {
                         // Check if the build exists and belongs to the user
-                        var checkBuildQuery = "SELECT COUNT(*) FROM Builds WHERE buildID = @buildID AND userID = @userID";
-                        int buildCount;
+                        var checkBuildQuery = "SELECT isPublic FROM Builds WHERE buildID = @buildID AND userID = @userID";
+                        bool isPublic;
+
                         using (MySqlCommand command = new MySqlCommand(checkBuildQuery, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@buildID", build.buildID);
                             command.Parameters.AddWithValue("@userID", userIDClaim);
-                            buildCount = Convert.ToInt32(await command.ExecuteScalarAsync());
+                            using (DbDataReader reader = await command.ExecuteReaderAsync())
+                            {
+                                if (!await reader.ReadAsync())
+                                {
+                                    return Json(new { success = false, errorMessage = "Build not found or you do not have permission to edit this build." });
+                                }
+                                isPublic = Convert.ToBoolean(reader["isPublic"]);
+                            }
                         }
 
-                        if (buildCount == 1)
+                        // Update build name if provided
+                        var updateBuildQuery = "UPDATE Builds SET buildName = @buildName, isPublic = @isPublic WHERE buildID = @buildID AND userID = @userID";
+                        using (MySqlCommand command = new MySqlCommand(updateBuildQuery, connection, transaction))
                         {
-                            // Update build name if provided)
-                            var updateBuildQuery = "UPDATE Builds SET buildName = @buildName, isPublic = @isPublic WHERE buildID = @buildID AND userID = @userID";
-                            using (MySqlCommand command = new MySqlCommand(updateBuildQuery, connection, transaction))
+                            command.Parameters.AddWithValue("@buildName", build.buildName);
+                            command.Parameters.AddWithValue("@isPublic", build.isPublic);
+                            command.Parameters.AddWithValue("@buildID", build.buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            await command.ExecuteNonQueryAsync();
+                        }
+
+                        if (isPublic != build.isPublic)
+                        {
+                            var updateNotesQuery = "UPDATE Notes SET isPublic = @isPublic WHERE buildID = @buildID AND userID = @userID";
+                            using (MySqlCommand command = new MySqlCommand(updateNotesQuery, connection, transaction))
                             {
-                                command.Parameters.AddWithValue("@buildName", build.buildName);
                                 command.Parameters.AddWithValue("@isPublic", build.isPublic);
                                 command.Parameters.AddWithValue("@buildID", build.buildID);
                                 command.Parameters.AddWithValue("@userID", userIDClaim);
                                 await command.ExecuteNonQueryAsync();
                             }
 
-                            // Update build image if provided
-                            if ((file != null && file.Length > 0) || (!string.IsNullOrEmpty(thumbnail)))
+                            var updateUrlsQuery = "UPDATE BuildUrls SET isPublic = @isPublic WHERE buildID = @buildID AND userID = @userID";
+                            using (MySqlCommand command = new MySqlCommand(updateUrlsQuery, connection, transaction))
                             {
-                                string s3ImageFilePath = "";
-                                string oldThumbnailPath;
-                                var oldThumbnailQuery = "SELECT filePath FROM Images WHERE buildID = @buildID AND userID = @userID AND typeID = 1";
-                                using (MySqlCommand command = new MySqlCommand(oldThumbnailQuery, connection, transaction))
-                                {
-                                    command.Parameters.AddWithValue("@buildID", build.buildID);
-                                    command.Parameters.AddWithValue("@userID", userIDClaim);
-                                    oldThumbnailPath = (string)await command.ExecuteScalarAsync();
-                                }
-                                if (file != null && file.Length > 0)
-                                {
-                                    var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
-                                    s3ImageFilePath = Path.Combine("Users", userIDClaim, "Thumbnails", imageFileName);
-
-                                    using (var memoryStream = new MemoryStream())
-                                    {
-                                        await file.CopyToAsync(memoryStream);
-                                        memoryStream.Position = 0; // Reset stream position after copy
-                                        await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath);
-                                        s3Objects.Add(s3ImageFilePath);
-                                    }
-
-                                    await _awsService.DeleteFileFromS3(oldThumbnailPath);
-                                }
-                                else if (!string.IsNullOrEmpty(thumbnail))
-                                {
-                                    string selectedThumbnailPath = Path.Combine(_webHostEnvironment.WebRootPath, "media", "thumbnails", thumbnail);
-                                    string thumbnailFilePath;
-
-                                    if (System.IO.File.Exists(selectedThumbnailPath))
-                                    {
-                                        // Generate a unique file name for the thumbnail copy
-                                        var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(selectedThumbnailPath);
-                                        s3ImageFilePath = Path.Combine("Users", userIDClaim, "Thumbnails", imageFileName);
-
-                                        // Copy the default thumbnail and upload it to the user's S3 folder
-                                        using (var memoryStream = new MemoryStream(await System.IO.File.ReadAllBytesAsync(selectedThumbnailPath)))
-                                        {
-                                            memoryStream.Position = 0;
-                                            await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath); // S3 upload method
-                                            s3Objects.Add(s3ImageFilePath);
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    return Json(new { success = false, errorMessage = "Selected thumbnail not found." });
-                                }
-
-                                var updateImageQuery = "UPDATE Images SET filePath = @filePath WHERE buildID = @buildID AND userID = @userID AND typeID = 1";
-                                using (MySqlCommand command = new MySqlCommand(updateImageQuery, connection, transaction))
-                                {
-                                    command.Parameters.AddWithValue("@filePath", s3ImageFilePath);
-                                    command.Parameters.AddWithValue("@buildID", build.buildID);
-                                    command.Parameters.AddWithValue("@userID", userIDClaim);
-                                    await command.ExecuteNonQueryAsync();
-                                }
+                                command.Parameters.AddWithValue("@isPublic", build.isPublic);
+                                command.Parameters.AddWithValue("@buildID", build.buildID);
+                                command.Parameters.AddWithValue("@userID", userIDClaim);
+                                await command.ExecuteNonQueryAsync();
                             }
 
-                            await transaction.CommitAsync();
-                            return Json(new { success = true });
+                            var updateImagesQuery = "UPDATE Images SET isPublic = @isPublic WHERE buildID = @buildID AND userID = @userID";
+                            using (MySqlCommand command = new MySqlCommand(updateImagesQuery, connection, transaction))
+                            {
+                                command.Parameters.AddWithValue("@isPublic", build.isPublic);
+                                command.Parameters.AddWithValue("@buildID", build.buildID);
+                                command.Parameters.AddWithValue("@userID", userIDClaim);
+                                await command.ExecuteNonQueryAsync();
+                            }                            
                         }
-                        else
+
+                        // Update build image if provided
+                        if ((file != null && file.Length > 0) || (!string.IsNullOrEmpty(thumbnail)))
                         {
-                            return Json(new { success = false, errorMessage = "Build not found or you do not have permission to edit this build." });
+                            string s3ImageFilePath = "";
+                            string oldThumbnailPath;
+                            var oldThumbnailQuery = "SELECT filePath FROM Images WHERE buildID = @buildID AND userID = @userID AND typeID = 1";
+                            using (MySqlCommand command = new MySqlCommand(oldThumbnailQuery, connection, transaction))
+                            {
+                                command.Parameters.AddWithValue("@buildID", build.buildID);
+                                command.Parameters.AddWithValue("@userID", userIDClaim);
+                                oldThumbnailPath = (string)await command.ExecuteScalarAsync();
+                            }
+                            if (file != null && file.Length > 0)
+                            {
+                                var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+                                s3ImageFilePath = Path.Combine("Users", userIDClaim.ToString(), "Thumbnails", imageFileName);
+
+                                using (var memoryStream = await _imageProcessingService.ResizeAndStripExif(file, 125, 125, true))
+                                {
+                                    if (_configService.GetEnvironment() != "local")
+                                    {
+                                        // Upload the clean image to S3
+                                        await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath);
+                                    }
+                                    s3Objects.Add(s3ImageFilePath);
+                                }
+
+                                if (_configService.GetEnvironment() != "local")
+                                {
+                                    await _awsService.DeleteFileFromS3(oldThumbnailPath);
+                                }
+                            }
+                            else if (!string.IsNullOrEmpty(thumbnail))
+                            {
+                                string selectedThumbnailPath = Path.Combine(_webHostEnvironment.WebRootPath, "media", "thumbnails", thumbnail);
+
+                                if (System.IO.File.Exists(selectedThumbnailPath))
+                                {
+                                    // Generate a unique file name for the thumbnail copy
+                                    var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(selectedThumbnailPath);
+                                    s3ImageFilePath = Path.Combine("Users", userIDClaim.ToString(), "Thumbnails", imageFileName);
+
+                                    // Copy the default thumbnail and upload it to the user's S3 folder
+                                    using (var memoryStream = new MemoryStream(await System.IO.File.ReadAllBytesAsync(selectedThumbnailPath)))
+                                    {
+                                        memoryStream.Position = 0;
+                                        if (_configService.GetEnvironment() != "local")
+                                        {
+                                            await _awsService.UploadStreamToS3(memoryStream, s3ImageFilePath); // S3 upload method
+                                        }
+                                        s3Objects.Add(s3ImageFilePath);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                return Json(new { success = false, errorMessage = "Selected thumbnail not found." });
+                            }
+
+                            var updateImageQuery = "UPDATE Images SET filePath = @filePath WHERE buildID = @buildID AND userID = @userID AND typeID = 1";
+                            using (MySqlCommand command = new MySqlCommand(updateImageQuery, connection, transaction))
+                            {
+                                command.Parameters.AddWithValue("@filePath", s3ImageFilePath);
+                                command.Parameters.AddWithValue("@buildID", build.buildID);
+                                command.Parameters.AddWithValue("@userID", userIDClaim);
+                                await command.ExecuteNonQueryAsync();
+                            }
                         }
+
+                        await transaction.CommitAsync();
+                        return Json(new { success = true });
                     }
                     catch (Exception ex)
                     {
                         await transaction.RollbackAsync();
-                        await _awsService.DeleteFilesFromS3(s3Objects);
+                        if (_configService.GetEnvironment() != "local")
+                        {
+                            await _awsService.DeleteFilesFromS3(s3Objects);
+                        }
                         return Json(new { success = false, errorMessage = ex.Message });
                     }
                 }
@@ -372,7 +559,7 @@ namespace BuildBazaarCore.Services
             List<String> s3Objects = new List<String>();
             using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
             {
-                var userIDClaim = token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                uint userIDClaim = getUserIDFromToken(token);
                 await connection.OpenAsync();
 
                 using (var transaction = await connection.BeginTransactionAsync())
@@ -429,21 +616,26 @@ namespace BuildBazaarCore.Services
 
                         if (!string.IsNullOrEmpty(originalNotePath))
                         {
-                            string newNotePath = Path.Combine("Users", userIDClaim, newBuildID.ToString(), "notes.txt");
-                            var noteQuery = "INSERT INTO Notes (filePath, buildID) VALUES (@filePath, @buildID)";
+                            string newNotePath = Path.Combine("Users", userIDClaim.ToString(), newBuildID.ToString(), "notes.txt");
+                            var noteQuery = "INSERT INTO Notes (filePath, buildID, userID, isPublic) VALUES (@filePath, @buildID, @userID, 0)";
                             using (MySqlCommand command = new MySqlCommand(noteQuery, connection, transaction))
                             {
                                 command.Parameters.AddWithValue("@filePath", newNotePath);
                                 command.Parameters.AddWithValue("@buildID", newBuildID);
+                                command.Parameters.AddWithValue("@userID", userIDClaim);
+
                                 await command.ExecuteNonQueryAsync();
                             }
 
-                            // Copy Notes Content
-                            if (!await _awsService.CopyS3ObjectAsync(originalNotePath, newNotePath))
+                            if (_configService.GetEnvironment() != "local")
                             {
-                                await transaction.RollbackAsync();
-                                await _awsService.DeleteFilesFromS3(s3Objects);
-                                return Json(new { success = false, errorMessage = "Error copying note" });
+                                // Copy Notes Content
+                                if (!await _awsService.CopyS3ObjectAsync(originalNotePath, newNotePath))
+                                {
+                                    await transaction.RollbackAsync();
+                                    await _awsService.DeleteFilesFromS3(s3Objects);
+                                    return Json(new { success = false, errorMessage = "Error copying note" });
+                                }
                             }
                             s3Objects.Add(newNotePath);
                         }
@@ -467,12 +659,13 @@ namespace BuildBazaarCore.Services
                         }
                         foreach (var newUrl in newUrlList)
                         {
-                            var newUrlQuery = "INSERT INTO BuildUrls (buildID, buildUrl, buildUrlName) VALUES (@buildID, @buildUrl, @buildUrlName)";
+                            var newUrlQuery = "INSERT INTO BuildUrls (buildID, buildUrl, buildUrlName, userID, isPublic) VALUES (@buildID, @buildUrl, @buildUrlName, @userID, 0)";
                             using (MySqlCommand copyImageCommand = new MySqlCommand(newUrlQuery, connection, transaction))
                             {
                                 copyImageCommand.Parameters.AddWithValue("@buildID", newUrl.buildID);
                                 copyImageCommand.Parameters.AddWithValue("@buildUrl", newUrl.buildUrl);
                                 copyImageCommand.Parameters.AddWithValue("@buildUrlName", newUrl.buildUrlName);
+                                copyImageCommand.Parameters.AddWithValue("@userID", userIDClaim);
 
                                 await copyImageCommand.ExecuteNonQueryAsync();
                             }
@@ -488,8 +681,8 @@ namespace BuildBazaarCore.Services
                                 while (await reader.ReadAsync())
                                 {
                                     string originalFilePath = reader["filePath"]?.ToString();
-                                    var imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(originalFilePath);
-                                    string newFilePath = Path.Combine("Users", userIDClaim, "Images", newBuildID.ToString(), imageFileName);
+                                    string imageFileName = Guid.NewGuid().ToString() + Path.GetExtension(originalFilePath);
+                                    string newFilePath = Path.Combine("Users", userIDClaim.ToString(), "Images", newBuildID.ToString(), imageFileName);
 
                                     // Insert new image record
                                     ImageModel newImage = new ImageModel();
@@ -499,19 +692,23 @@ namespace BuildBazaarCore.Services
                                     newImage.imageOrder = Convert.ToInt32(reader["imageOrder"]);
                                     newImageList.Add(newImage);
 
-                                    if (!await _awsService.CopyS3ObjectAsync(originalFilePath, newFilePath))
+                                    if (_configService.GetEnvironment() != "local")
                                     {
-                                        await transaction.RollbackAsync();
-                                        await _awsService.DeleteFilesFromS3(s3Objects);
-                                        return Json(new { success = false, errorMessage = "Error copying note" });
+                                        if (!await _awsService.CopyS3ObjectAsync(originalFilePath, newFilePath))
+                                        {
+                                            await transaction.RollbackAsync();
+                                            await _awsService.DeleteFilesFromS3(s3Objects);
+                                            return Json(new { success = false, errorMessage = "Error copying note" });
+                                        }
                                     }
                                     s3Objects.Add(newFilePath);
                                 }
                             }
                         }
+
                         foreach (var newImage in newImageList)
                         {
-                            var newImageQuery = "INSERT INTO Images (buildID, filePath, typeID, imageOrder, userID) VALUES (@buildID, @filePath, @typeID, @imageOrder, @userID)";
+                            var newImageQuery = "INSERT INTO Images (buildID, filePath, typeID, imageOrder, userID, isPublic) VALUES (@buildID, @filePath, @typeID, @imageOrder, @userID, 0)";
                             using (MySqlCommand command = new MySqlCommand(newImageQuery, connection, transaction))
                             {
                                 command.Parameters.AddWithValue("@buildID", newImage.buildID);
@@ -524,10 +721,8 @@ namespace BuildBazaarCore.Services
                             }
                         }
 
-                        // Commit the transaction
                         await transaction.CommitAsync();
                         return Json(new { success = true, newBuildID });
-
                     }
                     catch (Exception ex)
                     {
@@ -543,7 +738,7 @@ namespace BuildBazaarCore.Services
         {
             using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
             {
-                var userIDClaim = token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                uint userIDClaim = getUserIDFromToken(token);
                 await connection.OpenAsync();
 
                 using (var transaction = await connection.BeginTransactionAsync())
@@ -552,71 +747,75 @@ namespace BuildBazaarCore.Services
                     {
                         // Check if the build exists and belongs to the user
                         var checkBuildQuery = "SELECT COUNT(*) FROM Builds WHERE buildID = @buildID AND userID = @userID";
-                        int buildCount;
                         using (MySqlCommand command = new MySqlCommand(checkBuildQuery, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@buildID", buildID);
                             command.Parameters.AddWithValue("@userID", userIDClaim);
-                            buildCount = Convert.ToInt32(await command.ExecuteScalarAsync());
+                            int buildCount = Convert.ToInt32(await command.ExecuteScalarAsync());
+                            
+                            if (buildCount != 1)
+                            {
+                                return Json(new { success = false, errorMessage = "Build not found or you do not have permission to delete this build." });
+                            }
                         }
 
-                        if (buildCount == 1)
+                        string ThumbnailPath;
+                        var ThumbnailQuery = "SELECT filePath FROM Images WHERE buildID = @buildID AND userID = @userID AND typeID = 1";
+                        using (MySqlCommand command = new MySqlCommand(ThumbnailQuery, connection, transaction))
                         {
-                            string ThumbnailPath;
-                            var ThumbnailQuery = "SELECT filePath FROM Images WHERE buildID = @buildID AND userID = @userID AND typeID = 1";
-                            using (MySqlCommand command = new MySqlCommand(ThumbnailQuery, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@buildID", buildID);
-                                command.Parameters.AddWithValue("@userID", userIDClaim);
-                                ThumbnailPath = (string)await command.ExecuteScalarAsync();
-                            }
+                            command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            ThumbnailPath = (string)await command.ExecuteScalarAsync();
+                        }
 
-                            // Delete from Images table
-                            var deleteImagesQuery = "DELETE FROM Images WHERE buildID = @buildID AND userID = @userID";
-                            using (MySqlCommand command = new MySqlCommand(deleteImagesQuery, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@buildID", buildID);
-                                command.Parameters.AddWithValue("@userID", userIDClaim);
-                                await command.ExecuteNonQueryAsync();
-                            }
+                        // Delete from Images table
+                        var deleteImagesQuery = "DELETE FROM Images WHERE buildID = @buildID AND userID = @userID";
+                        using (MySqlCommand command = new MySqlCommand(deleteImagesQuery, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            await command.ExecuteNonQueryAsync();
+                        }
 
-                            // Delete from BuildUrls table
-                            var deleteBuildUrlsQuery = "DELETE FROM BuildUrls WHERE buildID = @buildID";
-                            using (MySqlCommand command = new MySqlCommand(deleteBuildUrlsQuery, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@buildID", buildID);
-                                await command.ExecuteNonQueryAsync();
-                            }
+                        // Delete from BuildUrls table
+                        var deleteBuildUrlsQuery = "DELETE FROM BuildUrls WHERE buildID = @buildID AND userID = @userID";
+                        using (MySqlCommand command = new MySqlCommand(deleteBuildUrlsQuery, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            await command.ExecuteNonQueryAsync();
+                        }
 
-                            // Delete from Notes table
-                            var deleteNotesQuery = "DELETE FROM Notes WHERE buildID = @buildID";
-                            using (MySqlCommand command = new MySqlCommand(deleteNotesQuery, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@buildID", buildID);
-                                await command.ExecuteNonQueryAsync();
-                            }
+                        // Delete from Notes table
+                        var deleteNotesQuery = "DELETE FROM Notes WHERE buildID = @buildID AND userID = @userID";
+                        using (MySqlCommand command = new MySqlCommand(deleteNotesQuery, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            await command.ExecuteNonQueryAsync();
+                        }
 
-                            // Delete from Builds table
-                            var deleteBuildQuery = "DELETE FROM Builds WHERE buildID = @buildID AND userID = @userID";
-                            using (MySqlCommand command = new MySqlCommand(deleteBuildQuery, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@buildID", buildID);
-                                command.Parameters.AddWithValue("@userID", userIDClaim);
-                                await command.ExecuteNonQueryAsync();
-                            }
+                        // Delete from Builds table
+                        var deleteBuildQuery = "DELETE FROM Builds WHERE buildID = @buildID AND userID = @userID";
+                        using (MySqlCommand command = new MySqlCommand(deleteBuildQuery, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@buildID", buildID);
+                            command.Parameters.AddWithValue("@userID", userIDClaim);
+                            await command.ExecuteNonQueryAsync();
+                        }
 
-                            // Commit the transaction
+                        // Commit the transaction
 
-                            string prefix = Path.Combine("Users", userIDClaim, buildID.ToString());
+                        string prefix = Path.Combine("Users", userIDClaim.ToString(), buildID.ToString());
+                        if (_configService.GetEnvironment() != "local")
+                        {
                             await _awsService.BulkDeleteFromS3(prefix);
                             await _awsService.DeleteFileFromS3(ThumbnailPath);
-                            await transaction.CommitAsync();
-                            return Json(new { success = true });
                         }
-                        else
-                        {
-                            return Json(new { success = false, errorMessage = "Build not found or you do not have permission to delete this build." });
-                        }
+
+                        await transaction.CommitAsync();
+                        
+                        return Json(new { success = true });
                     }
                     catch (Exception ex)
                     {
@@ -625,175 +824,6 @@ namespace BuildBazaarCore.Services
                     }
                 }
             }
-        }
-
-        public async Task<IActionResult> GetBuilds(JwtSecurityToken token)
-        {
-            try
-            {
-                List<BuildModel> builds = new List<BuildModel>();
-                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-                {
-                    var userIDClaim = token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-                    connection.Open();
-                    string query = "SELECT * FROM Images Join Builds ON Images.buildID = Builds.buildID WHERE Images.userID = @userID AND Images.typeID = 1";
-
-                    using (MySqlCommand command = new MySqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@userID", userIDClaim);
-                        using (DbDataReader reader = await command.ExecuteReaderAsync())
-                            while (reader.Read())
-                            {
-                                BuildModel build = new BuildModel();
-                                build.buildID = Convert.ToUInt32(reader["buildID"]);
-                                build.userID = Convert.ToUInt32(reader["userID"]);
-                                build.imageID = Convert.ToUInt32(reader["imageID"]);
-                                build.buildName = reader["buildName"].ToString();
-                                build.isPublic = Convert.ToBoolean(reader["isPublic"]);
-                                build.filePath = reader["filePath"].ToString();
-
-                                builds.Add(build);
-                            }
-                    }
-                }
-                return Json(new { success = true, builds });
-            }
-            catch (MySqlException ex)
-            {
-                return Json(new { success = false, errorMessage = ex.Message });
-            }
-        }
-
-        public async Task<IActionResult> GetPublicBuilds(string userName, JwtSecurityToken token)
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(userName) && !Regex.IsMatch(userName, "^[a-zA-Z0-9_.-]+$"))
-                {
-                    return Json(new { success = false, errorMessage = "Invalid username format" });
-                }
-                int userID = -1;
-                List<BuildModel> builds = new List<BuildModel>();
-                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-                {
-                    connection.Open();
-
-                    if (!string.IsNullOrEmpty(userName))
-                    {
-                        string userQuery = "SELECT userID FROM Users WHERE Users.Username = @userName LIMIT 1";
-                        using (MySqlCommand command = new MySqlCommand(userQuery, connection))
-                        {
-                            command.Parameters.AddWithValue("@userName", userName);
-                            var result = await command.ExecuteScalarAsync();
-
-                            if (result == null)
-                            {
-                                return Json(new { success = false, errorMessage = "Invalid request" });
-                            }
-                            userID = Convert.ToInt32(result);
-                        }
-                    }
-                    else
-                    {
-                        if (token == null)
-                        {
-                            return Json(new { success = false, errorMessage = "Log in or specify a user" });
-                        }
-                        userID = Convert.ToInt32(token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value);
-                        string userQuery = "SELECT userName FROM Users WHERE Users.userID = @userID LIMIT 1";
-                        using (MySqlCommand command = new MySqlCommand(userQuery, connection))
-                        {
-                            command.Parameters.AddWithValue("@userID", userID);
-                            var result = await command.ExecuteScalarAsync();
-
-                            if (result == null)
-                            {
-                                return Json(new { success = false, errorMessage = "Invalid request" });
-                            }
-                            userName = result.ToString();
-                        }
-                    }
-
-                    string imageQuery = "SELECT * FROM Images Join Builds ON Images.buildID = Builds.buildID WHERE Images.userID = @userID AND Images.typeID = 1 AND Builds.isPublic = 1";
-                    using (MySqlCommand command = new MySqlCommand(imageQuery, connection))
-                    {
-                        command.Parameters.AddWithValue("@userID", userID);
-                        using (DbDataReader reader = await command.ExecuteReaderAsync())
-                            while (reader.Read())
-                            {
-                                BuildModel build = new BuildModel();
-                                build.buildID = Convert.ToUInt32(reader["buildID"]);
-                                build.userID = Convert.ToUInt32(reader["userID"]);
-                                build.imageID = Convert.ToUInt32(reader["imageID"]);
-                                build.buildName = reader["buildName"].ToString();
-                                build.isPublic = Convert.ToBoolean(reader["isPublic"]);
-                                build.filePath = reader["filePath"].ToString();
-
-                                builds.Add(build);
-                            }
-                    }
-                }
-                return Json(new { success = true, builds, userName = userName });
-            }
-            catch (MySqlException ex)
-            {
-                return Json(new { success = false, errorMessage = ex.Message });
-            }
-        }
-
-        public async Task<(bool success, int buildID, string errorMessage)> getBuildID(uint buildID, bool isPublic, JwtSecurityToken token)
-        {
-            if (isPublic)
-            {
-                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-                {
-                    await connection.OpenAsync();
-
-                    string query = "SELECT BuildID FROM Builds WHERE BuildID = @buildID AND IsPublic = 1";
-                    using (MySqlCommand command = new MySqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@buildID", buildID);
-                        var result = await command.ExecuteScalarAsync();
-
-                        if (result == null || result == DBNull.Value)
-                        {
-                            return (false, -1, "Build not found or not public.");
-                        }
-
-                        return (true, Convert.ToInt32(result), null);
-                    }
-                }
-            }
-            else
-            {
-                if (token == null)
-                {
-                    return (false, -1, "Invalid token.");
-                }
-                
-                var userIDClaim = token.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-                {
-                    await connection.OpenAsync();
-
-                    string query = "SELECT BuildID FROM Builds WHERE BuildID = @buildID AND UserID = @userID";
-                    using (MySqlCommand command = new MySqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@buildID", buildID);
-                        command.Parameters.AddWithValue("@userID", userIDClaim);
-                        var result = await command.ExecuteScalarAsync();
-
-                        if (result == null || result == DBNull.Value)
-                        {
-                            return (false, -1, "Build not found or user does not own it.");
-                        }
-
-                        return (true, Convert.ToInt32(result), null);
-                    }
-                }
-            }
-
         }
     }
 }

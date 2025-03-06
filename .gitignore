@@ -408,3 +408,5 @@ Build Bazaar Terraform/terraform.tfstate.d/prod/terraform.tfstate
 docker&mysql commands.txt
 Server/BuildBazaar/BuildBazaarCore/Certificates/us-east-1-bundle.pem
 Server/BuildBazaar/docker run.bat
+BuildBazaarTerraform/Vars/dev.tfvars
+BuildBazaarTerraform/Vars/prod.tfvars

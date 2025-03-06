@@ -10,6 +10,7 @@ namespace BuildBazaarCore.Services
         Task InitializeAsync();
         string GetConnectionString();
         string GetConfigValue(string key);
+        string GetEnvironment();
     }
 
     public class ConfigService : IConfigService
@@ -96,6 +97,11 @@ namespace BuildBazaarCore.Services
         public string GetConfigValue(string key)
         {
             return _config.ContainsKey(key) ? _config[key] : null;
+        }
+
+        public string GetEnvironment()
+        {
+            return _environment;
         }
     }
 }

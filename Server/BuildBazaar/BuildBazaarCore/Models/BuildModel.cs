@@ -11,6 +11,5 @@ namespace BuildBazaarCore.Models
         public string buildName { get; set; }
         public string filePath { get; set; }
         public bool isPublic {get; set;}
-
     }
 }

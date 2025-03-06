@@ -20,6 +20,5 @@ namespace BuildBazaarCore.Models
         [MinLength(6, ErrorMessage = "The password must be at least 6 characters.")]
         [MaxLength(50)]
         public string password { get; set; }
-
     }
 }

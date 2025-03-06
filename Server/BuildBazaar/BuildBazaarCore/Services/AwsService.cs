@@ -275,12 +275,16 @@ namespace BuildBazaarCore.Services
                                 {
                                     var filePath = reader["filePath"]?.ToString();
                                     string fullUrl = $"https://{distributionDomain}/{filePath}";
-                                    string signedUrl = AmazonCloudFrontUrlSigner.GetCannedSignedURL(
+                                    string signedUrl = "";
+                                    
+                                    if (_configService.GetEnvironment() != "local")
+                                    {
+                                        signedUrl = AmazonCloudFrontUrlSigner.GetCannedSignedURL(
                                         fullUrl,
                                         privateKeyReader,
                                         keyPairId,
-                                        DateTime.UtcNow.AddDays(1)
-                                    );
+                                        DateTime.UtcNow.AddDays(1));
+                                    }                                    
 
                                     urls.Add(new { filePath, url = signedUrl });
                                 }
