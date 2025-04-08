@@ -22,7 +22,9 @@ namespace BuildBazaarCore.Services
         Task CreateExampleBuild(int userID, MySqlConnection connection);
         Task<IActionResult> EditBuild(BuildModel build, IFormFile file, string thumbnail, JwtSecurityToken token);
         Task<IActionResult> CopyBuild(int originalBuildID, JwtSecurityToken token);
-        Task<IActionResult> DeleteBuild(int buildID, JwtSecurityToken token);        
+        Task<IActionResult> DeleteBuild(int buildID, JwtSecurityToken token);
+        Task<IActionResult> SearchBuilds(int page, string sortBy, IFormCollection request);
+        Task<IActionResult> GetSearchFormFields();
     }
 
     public class BuildService : BaseService, IBuildService
@@ -822,6 +824,150 @@ namespace BuildBazaarCore.Services
                         await transaction.RollbackAsync();
                         return Json(new { success = false, errorMessage = ex.Message });
                     }
+                }
+            }
+        }
+
+        public async Task<IActionResult> SearchBuilds(int page, string sortBy, IFormCollection request)
+        {
+            try
+            {
+                List<BuildSearchModel> builds = new List<BuildSearchModel>();
+                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+                {
+                    int offset = (page - 1 ) * 20;
+                    connection.Open();
+                    string query = @"
+                        SELECT b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName
+                        FROM Builds b 
+                        JOIN Images i ON i.buildID = b.buildID 
+                        JOIN Users u ON u.userID = b.userID 
+                        LEFT JOIN Classes c ON c.classID = b.classID
+                        LEFT JOIN Games g ON g.gameID = b.gameID
+                        WHERE b.isPublic = 1 
+                        AND b.gameID = @gameID
+                        AND i.typeID = 1";
+                        
+
+
+                    //@"
+                    //    SELECT b.buildID, b.buildName, b.userID, i.filePath, u.userName, 
+                    //           g.gameName, c.className, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
+                    //    FROM Builds b 
+                    //    JOIN Images i ON i.buildID = b.buildID 
+                    //    JOIN Users u ON u.userID = b.userID 
+                    //    LEFT JOIN Games g ON g.gameID = b.gameID
+                    //    LEFT JOIN Classes c ON c.classID = b.classID
+                    //    LEFT JOIN BuildTags bt ON bt.buildID = b.buildID
+                    //    LEFT JOIN Tags t ON t.tagID = bt.tagID
+                    //    WHERE b.isPublic = 1 
+                    //    AND i.typeID = 1 ";
+
+                    if (!string.IsNullOrEmpty(request["buildName"]))
+                        query += " AND LOWER(b.buildName) LIKE LOWER(@buildName) ";
+
+                    if (!string.IsNullOrEmpty(request["author"]))
+                        query += " AND LOWER(u.userName) LIKE LOWER(@author) ";
+
+                    if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
+                        query += " AND b.classID = @classID ";
+
+                    //if (request["gameID"] != "0" && !string.IsNullOrEmpty(request["gameID"]))
+                    //    query += " AND b.gameID = @gameId ";
+
+                    //if (!string.IsNullOrEmpty(request["tags"]))
+                    //    query += " AND t.tagName IN (@tags) ";
+
+                    // Group by to handle the tag concatenation
+                    //query += " GROUP BY b.buildID ";
+
+                    // Add sorting
+                    query += @" ORDER BY 
+                        CASE WHEN @sortBy = 'newest' THEN b.buildID END DESC,
+                        CASE WHEN @sortBy = 'oldest' THEN b.buildID END ASC
+                        LIMIT 20 OFFSET @offset";
+
+                    using (MySqlCommand command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@offset", offset);
+                        command.Parameters.AddWithValue("@sortBy", sortBy);
+                        command.Parameters.AddWithValue("@gameID", request["gameId"]);
+
+                        // Add parameters for search filters
+                        if (!string.IsNullOrEmpty(request["buildName"]))
+                            command.Parameters.AddWithValue("@buildName", "%" + request["buildName"] + "%");
+
+                        if (!string.IsNullOrEmpty(request["author"]))
+                            command.Parameters.AddWithValue("@author", "%" + request["author"] + "%");
+
+                        if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
+                            command.Parameters.AddWithValue("@classID", request["classId"]);
+
+                        //if (request["gameID"] != "0" && !string.IsNullOrEmpty(request["gameID"]))
+                        //    command.Parameters.AddWithValue("@gameID", request["gameID"]);
+
+                        //if (!string.IsNullOrEmpty(request["tags"]))
+                        //{
+                        //    var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).ToList();
+                        //    command.Parameters.AddWithValue("@tags", string.Join(",", tagsList));
+                        //}
+
+                        using (DbDataReader reader = await command.ExecuteReaderAsync())
+                        {
+                            while (reader.Read())
+                            {
+                                BuildSearchModel build = new BuildSearchModel
+                                {
+                                    buildID = Convert.ToUInt32(reader["buildID"]),
+                                    buildName = Convert.ToString(reader["buildName"]),
+                                    userID = Convert.ToUInt32(reader["userID"]),
+                                    userName = Convert.ToString(reader["userName"]),
+                                    filePath = Convert.ToString(reader["filePath"]),
+                                    gameName = Convert.ToString(reader["gameName"]),
+                                    className = Convert.ToString(reader["className"])
+                                    //tags = reader["tags"] != DBNull.Value ? Convert.ToString(reader["tags"]).Split(',').ToList() : new List<string>()
+                                };
+                                builds.Add(build);
+                            }
+                        }
+                    }
+                }
+                return Json(new { success = true, builds });
+            }
+            catch (MySqlException ex)
+            {
+                return Json(new { success = false, errorMessage = ex.Message });
+            }
+        }
+
+        public async Task<IActionResult> GetSearchFormFields()
+        {
+            using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+            {
+                await connection.OpenAsync();
+                try
+                {
+                    List<ClassModel> classes = new List<ClassModel>();
+
+                    var classesQuery = "SELECT * FROM Classes ORDER BY className;";
+                    using (MySqlCommand command = new MySqlCommand(classesQuery, connection))
+                    {
+                        using (DbDataReader reader = await command.ExecuteReaderAsync())
+                            while (reader.Read())
+                            {
+                                ClassModel poeClass= new ClassModel();
+                                poeClass.classID = Convert.ToUInt32(reader["classID"]);
+                                poeClass.className = reader["className"].ToString();
+                                poeClass.gameID = Convert.ToUInt32(reader["gameID"]);
+
+                                classes.Add(poeClass);
+                            }
+                    }
+                    return Json(new {success = true, classes });
+                }
+                catch (Exception ex)
+                {
+                    return Json(new { success = false, errorMessage = ex.Message });
                 }
             }
         }

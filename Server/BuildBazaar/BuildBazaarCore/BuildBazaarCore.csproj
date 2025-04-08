@@ -12,12 +12,16 @@
   <ItemGroup>
     <Compile Remove="wwwroot\Example Build\**" />
     <Compile Remove="wwwroot\ExampleBuild\**" />
+    <Compile Remove="wwwroot\lib\**" />
     <Content Remove="wwwroot\Example Build\**" />
     <Content Remove="wwwroot\ExampleBuild\**" />
+    <Content Remove="wwwroot\lib\**" />
     <EmbeddedResource Remove="wwwroot\Example Build\**" />
     <EmbeddedResource Remove="wwwroot\ExampleBuild\**" />
+    <EmbeddedResource Remove="wwwroot\lib\**" />
     <None Remove="wwwroot\Example Build\**" />
     <None Remove="wwwroot\ExampleBuild\**" />
+    <None Remove="wwwroot\lib\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,10 +50,6 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.0" />
     <PackageReference Include="MySql.Data" Version="9.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="wwwroot\lib\" />
   </ItemGroup>
 
   <ItemGroup>

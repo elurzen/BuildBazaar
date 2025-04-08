@@ -1,117 +1,3 @@
-function initLoginForm() {
-    $('#login-form').submit(function (event) {
-        event.preventDefault(); // prevent form from submitting
-        removeErrorInputs($('#login-form'));
-
-        // get form data
-        var formData = {
-            username: $('#username').val(),
-            password: $('#password').val()
-        };
-
-        $('input').removeClass('error');
-
-        disableForm($('#login-form'));
-        // send ajax request
-        $.ajax({
-            type: 'POST',
-            url: '/User/Login',
-            data: formData
-        })
-            .done(async function (result) {
-                if (!result.success) { //TODO: Something goes wrong here when signing in - console error
-                    toastr.error(`Error: ${result.errorMessage}`);
-                    addErrorInputs($('#login-form'));
-                    return;
-                }
-                localStorage.setItem('token', result.token);
-                localStorage.setItem('username', result.username);
-                await cleanUpExpiredCache();
-                window.location.href = '/Builds';
-            })
-            .fail(function (xhr, status, error) {
-                // ajax error, show error messages
-                console.log(error);
-                toastr.error('An error occurred while logging in.');
-            })
-            .always(function () {
-                enableForm($('#login-form'));
-            });
-    });
-}
-
-function initSignUpForm() {
-    $('#signup-form').submit(function (event) {
-        event.preventDefault(); // prevent the form from submitting normally
-        removeErrorInputs($('#signup-form'));
-        var validationError = false;
-
-        const regex = /^[a-zA-Z0-9_.-]+$/;
-        if (!regex.test($('#new-username').val())) {
-            $('#new-username').addClass('error');
-            toastr.error('Username may only contain letters, numbers, underscores, hyphens, or periods');
-            validationError = true;
-        }
-
-        var password = $('#new-password').val();
-        if (!validatePassword(password)) {
-            $('#new-password').addClass('error');
-            validationError = true;
-        }
-
-        if (validationError) {
-            return;
-        }
-
-        toastr.info('Working...');
-
-        // get the form data
-        var formData = {
-            'username': $('#new-username').val(),
-            'email': $('#new-email').val(),
-            'password': password
-        };
-
-        disableForm($('#signup-form'));
-        // send an AJAX POST request to the CreateUser action method
-        $.ajax({
-            type: 'POST',
-            url: '/User/CreateUser',
-            data: formData,
-            dataType: 'json',
-            encode: true
-        })
-            .done(function (result) {
-                if (!result.success) {
-                    toastr.clear();
-                    toastr.error(`Error: ` + result.errorMessage);
-                    if (result.errorMessage.toLowerCase().includes('username')) {
-                        $('#new-username').addClass('error');
-                    }
-                    if (result.errorMessage.toLowerCase().includes('email')) {
-                        $('#new-email').addClass('error');
-                    }
-                    if (result.errorMessage.toLowerCase().includes('password')) {
-                        $('#new-password').addClass('error');
-                    }
-                    return;
-                }
-                toastr.clear();
-                toastr.success('User Created Successfully!')
-                hideSignupForm();
-            })
-            .fail(function (xhr, status, error) {
-                // handle the AJAX request failure
-                toastr.clear();
-                toastr.error('Something went wrong')
-                console.log(error);
-            })
-            .always(function () {
-                // re-enable the form and hide the loading screen
-                enableForm($('#signup-form'));
-            });
-    });
-}
 
 function initPasswordResetForm() {
     $('#password-reset-popup').submit(function (event) {
@@ -185,18 +71,6 @@ function initNewPasswordForm() {
                 enableForm($('#new-password-popup'));
             });
     });
-}
-
-function showSignupForm() {
-    $('#new-user-form')[0].reset();  
-    removeErrorInputs($('#new-user-form'));    
-    $('#signup-form').show();
-    $('#new-email').focus();
-
-}
-
-function hideSignupForm() {
-    $('#signup-form').hide();
 }
 
 function showPasswordResetForm() {
@@ -274,21 +148,204 @@ async function parseUrl() {
         $('#token-new-password').focus();
         return;
     }
-    if (await validateUserToken()) {
-        if (window.location.pathname != '/Builds') {
-            window.location.href = '/Builds';
-        }
-    }
-    $('#username').focus();
+    $('#search-buildname').focus();
 }
 
+function initSearchSlider() {
+    const slider = $('#search-slider');
+    const button = $('#search-slider-button');
+    const options = $('.search-slider-option');
+    const classes = $('#search-class');
+
+    let activeSliderOption = parseInt(localStorage.getItem('searchSliderPosition')) || 0; // Tracks the current active option (0 = PoE, 1 = PoE 2)
+
+    const updateHeaderSlider = () => {
+        // Update active state
+        options.each(function (index) {
+            $(this).toggleClass('active', index === activeSliderOption);
+        });
+
+        classes.find('option:not(:first)').hide();
+        classes.find('option').filter(function () {
+            return $(this).data('game-id') === activeSliderOption+1 || $(this).val() === "0";
+        }).show();
+        classes.val("0");
+
+        // Move the slider button
+        const position = activeSliderOption === 0 ? 0 : (slider.width() / 2) - 1;
+        button.css('transform', `translateX(${position}px)`);
+    };
+
+    slider.on('click', function () {
+        // Toggle between the two options
+        activeSliderOption = activeSliderOption === 0 ? 1 : 0;
+        localStorage.setItem('searchSliderPosition', activeSliderOption);
+        updateHeaderSlider();
+    });
+
+    // Initialize the slider with the first option active
+    updateHeaderSlider();
+    slider.removeClass('hidden');
+    button.removeClass('hidden');
+}
+
+async function initSearchForm() {
+    $("#search-form").on("submit", function (e) {
+        e.preventDefault();
+        fetchSearchResults(true);
+    });
+
+    $("#search-reset").on("click", function () {
+        $("#search-form")[0].reset();
+        //fetchSearchResults(true);
+    });
+
+    // Sort dropdown
+    $("#search-sort").on("change", function () {
+        sortBy = $(this).val() === "0" ? "newest" : "oldest";
+        //fetchSearchResults(true);
+    });
+
+    await populateSearchForm();
+    initSearchSlider();
+
+    // Infinite scroll
+    $(window).on("scroll", function () {
+        if ($(window).scrollTop() + $(window).height() > $(document).height() - 200) {
+            fetchSearchResults(false);
+        }
+    });
+}
+
+function populateSearchForm() {
+    return new Promise((resolve, reject) => {
+        $.ajax({
+            type: 'POST',
+            url: '/Build/GetSearchFormFields'
+        })
+            .done(function (result) {
+                if (!result.success) {
+                    console.log(result.errorMessage); // Fixed to use result.errorMessage
+                    toastr.error('An error occurred, try again later.');
+                    reject(new Error(result.errorMessage));
+                    return;
+                }
+                var classDropdown = $('#search-class');
+                $.each(result.classes, function (index, classItem) {
+                    classDropdown.append($('<option></option>')
+                        .attr('value', classItem.classID)
+                        .attr('data-game-id', classItem.gameID)
+                        .text(classItem.className));
+                });
+                resolve();
+            })
+            .fail(function (xhr, status, error) {
+                console.log(error);
+                toastr.error('An error occurred, try again later.');
+                reject(error);
+            });
+    });
+}
+
+function fetchSearchResults(reset = false) {
+    if (isLoading)
+        return;
+
+    isLoading = true;
+
+    if (reset) {
+        page = 1;
+        $("#search-results").empty();
+    }
+    
+
+    const formData = new FormData();
+    formData.append("page", page);
+    formData.append("sortBy", sortBy);
+    formData.append("buildName", $("#search-buildname").val());
+    formData.append("author", $("#search-author").val());
+    formData.append("classId", $("#search-class").val());
+    formData.append("gameId", $(".search-slider-option.active").data("value"));
+    formData.append("tags", $("#search-tags").val());
+
+    $.ajax({
+        type: "POST",
+        url: "/Build/SearchBuilds",
+        data: formData,
+        processData: false,
+        contentType: false
+    })
+        .done(function (data) {
+            if (!data.success) {
+                toastr.error(data.errorMessage || "Failed to load builds.");
+                return;
+            }
+
+            if (data.builds.length === 0 && page === 1) {
+                $("#search-results").html("<div class='no-results'>No builds found matching your criteria.</div>");
+                return;
+            }
+
+            data.builds.forEach(build => {
+                getCachedImageUrl(build.filePath).then(cachedFilePath => {
+                    if (!cachedFilePath) {
+                        cachedFilePath = '/media/question-mark.png';
+                    }
+
+                    var img = $('<img>').attr('src', cachedFilePath).addClass('result-thumbnail');
+
+                    let div = $(`
+                        <div class="result-item" data-build-id="${build.buildID}">
+                            ${img.prop('outerHTML')}
+                            <div>${build.buildName}</div>
+                            <div>${build.userName}</div>
+                            <div>${build.gameName || "N/A"}</div>
+                            <div>${build.className || "N/A"}</div>
+                            <div>${build.tags ? build.tags.join(", ") : ""}</div>
+                        </div>
+                    `);
+
+                    // Add click event to navigate to build details
+                    div.on("click", function () {
+                        window.location.href = `/Public/${build.userName}/${build.buildID}`;
+                    });
+
+                    $("#search-results").append(div);
+                });
+            });
+
+            if (data.builds.length > 0) {
+                page++;
+            }
+        })
+        .fail(function (xhr, status, error) {
+            toastr.error("An error occurred while fetching builds: " + error);
+        })
+        .always(function () {
+            isLoading = false;
+        });
+}
+
+$(".column-header").click(function () {
+    sortBy = $(this).data("sort");
+    fetchSearchResults(true);
+});
+
+$(window).scroll(function () {
+    if ($(window).scrollTop() + $(window).height() >= $(document).height() - 50) {
+        fetchSearchResults();
+    }
+});
+
+let sortBy = "newest";
+let page = 1;
+let isLoading = false;
+
 $(document).ready(function () {
-    initToastrSettings();
-    checkMobile();
     parseUrl();
-    initLoginForm();
-    initSignUpForm();   
     initPasswordResetForm();
     initNewPasswordForm();
+    initSearchForm();
+    fetchSearchResults();
 });
 

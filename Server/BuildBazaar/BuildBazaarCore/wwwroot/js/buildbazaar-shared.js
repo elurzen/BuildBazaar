@@ -394,218 +394,35 @@ function initSidebarToggle() {
     $('#sidebar').removeClass('hidden');
 }
 
-function initSlider() {
-    const slider = $('.slider');
-    const button = $('.slider-button');
-    const options = $('.slider-option');
-    const poeHeader = $('#poe-header');
-    const poe2Header = $('#poe2-header');
-    let activeSliderOption = parseInt(localStorage.getItem('sliderPosition')) || 0; // Tracks the current active option (0 = PoE, 1 = PoE 2)
 
-    const updateSlider = () => {
-        // Update active state
-        options.each(function(index) {
-            $(this).toggleClass('active', index === activeSliderOption);
-        });
-
-        // Move the slider button
-        const position = activeSliderOption === 0 ? 0 : (slider.width() / 2) - 1;
-        button.css('transform', `translateX(${position}px)`);
-
-        poeHeader.css('display', activeSliderOption === 0 ? 'inline-flex' : 'none');
-        poe2Header.css('display', activeSliderOption === 1 ? 'inline-flex' : 'none');
-    };
-
-    slider.on('click', function() {
-        // Toggle between the two options
-        activeSliderOption = activeSliderOption === 0 ? 1 : 0;
-        localStorage.setItem('sliderPosition', activeSliderOption);
-        updateSlider();
-    });
-
-    // Initialize the slider with the first option active
-    updateSlider();
-    slider.removeClass('hidden');
-    button.removeClass('hidden');
-
-}
-async function logout() {
-    localStorage.clear();
-    await cleanUpExpiredCache();
-    window.location.href = "/";
-}
-
-function logoClick() {
-    var userToken = localStorage.getItem("token");
-    if (userToken == null) {
-        window.location.href = "/";
-        return;
-    }
-    window.location = '/Builds';
-}
 
 function initFilter() {
-    $('#build-filter').on('input', function () {
-        var filterText = $(this).val().toLowerCase();
 
-        $('#sidebar-build-list li').each(function () {
-            var listItem = $(this);
-            var buildId = listItem.data('buildID');
-
-            // Always Show Create / Copy Build Butotn
-            if (buildId === undefined) {
-                return;
-            }
-
-            // Filter items based on the text
-            if (listItem.text().toLowerCase().includes(filterText)) {
-                listItem.show();
-            } else {
-                listItem.hide();
-            }
-        });
+    $('#filter-builds-li').css('display', 'flex');
+    $('#build-filter, #header-menu-build-filter').on('input', function () {
+        filterBuilds($(this).val());
     });
 }
 
-async function populateImageCache(records) {
-    var userToken = localStorage.getItem('token');
-    let missingCacheImages = [];
-    for (const record of records) {
-        const cachedFilePath = await getCachedImageUrl(record.filePath);
+function filterBuilds(filterText) {
+    $('#build-filter, #header-menu-build-filter').val(filterText);
 
-        if (!cachedFilePath) {
-            missingCacheImages.push(record.imageID);
+    var filterTextLower = filterText.toLowerCase();  
+
+    const applyFilter = function () {
+        const listItem = $(this);
+        const buildId = listItem.data('buildID');
+
+        // Skip items without buildID (like create/copy buttons)
+        if (buildId === undefined) {
+            return;
         }
 
+        // Show/hide based on text content
+        listItem.toggle(listItem.text().toLowerCase().includes(filterTextLower));
     };
-    // If there are missing files, make a bulk request to fetch the URLs
-    if (missingCacheImages.length > 0) {
-        await $.ajax({
-            type: 'POST',
-            url: '/BuildData/GetBulkImageUrls',
-            headers: {
-                Authorization: userToken
-            },
-            data: { imageIDs: missingCacheImages }
-        })
-            .done(function (result) {
-                if (!result.success) {
-                    toastr.error(result.errorMessage);
-                }
-                result.urls.forEach((urlObj) => {
-                    cacheImageUrl(urlObj.filePath, urlObj.url);
-                })
-            })
-            .fail(function (xhr, status, error) {
-                toastr.error('Something went wrong fetching images');
-                console.error(error);
-            });
-    }
+
+    $('#sidebar-build-list li').each(applyFilter);
+    $('#header-menu-list li.build-item').each(applyFilter);
 }
 
-function storeInCache(filePath, url, expirationInDays = 1) {
-    const expiration = Date().getTime() + (expirationInDays * 24 * 60 * 60 * 1000); // 1-day expiry
-    const data = { url, expiration };
-    localStorage.setItem(filePath, JSON.stringify(data));
-}
-
-function openIndexedDB(dbName = DB_NAME, storeName = STORE_NAME){
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 1);
-
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(storeName)) {
-                const store = db.createObjectStore(storeName, { keyPath: 'filePath' });
-                store.createIndex('expiration', 'expiration', { unique: false });
-            }
-        };
-
-        request.onsuccess = (event) => {
-            resolve(event.target.result);
-        };
-
-        request.onerror = (event) => {
-            reject(event.target.error);
-        };
-    });
-}
-
-function addOrUpdateCacheEntry(filePath, url, expiration, dbName, storeName) {
-    return new Promise(async (resolve, reject) => {
-        const db = await openIndexedDB(dbName, storeName);
-        const transaction = db.transaction(storeName, 'readwrite');
-        const store = transaction.objectStore(storeName);
-        const data = { filePath, url, expiration };
-
-        const request = store.put(data);
-
-        request.onsuccess = () => resolve(true);
-        request.onerror = (event) => reject(event.target.error);
-    });
-}
-
-function getCacheEntry(filePath, dbName, storeName) {
-    return new Promise(async (resolve, reject) => {
-        const db = await openIndexedDB(dbName, storeName);
-        const transaction = db.transaction(storeName, 'readonly');
-        const store = transaction.objectStore(storeName);
-
-        const request = store.get(filePath);
-
-        request.onsuccess = (event) => resolve(event.target.result);
-        request.onerror = (event) => reject(event.target.error);
-    });
-}
-
-function removeExpiredEntries(dbName, storeName) {
-    return new Promise(async (resolve, reject) => {
-        const db = await openIndexedDB(dbName, storeName);
-        const transaction = db.transaction(storeName, 'readwrite');
-        const store = transaction.objectStore(storeName);
-        const index = store.index('expiration');
-        const now = Date.now();
-
-        const request = index.openCursor(IDBKeyRange.upperBound(now));
-
-        request.onsuccess = (event) => {
-            const cursor = event.target.result;
-            if (cursor) {
-                cursor.delete(); // Delete the expired entry
-                cursor.continue(); // Continue iterating
-            } else {
-                resolve(true); // No more expired entries
-            }
-        };
-
-        request.onerror = (event) => reject(event.target.error);
-    });
-}
-
-async function cacheImageUrl(filePath, url, expirationInDays = 1) {
-    const dbName = 'ImageCacheDB';
-    const storeName = 'ImageCacheStore';
-    const expiration = Date.now() + expirationInDays * 24 * 60 * 60 * 1000;
-
-    try {
-        await addOrUpdateCacheEntry(filePath, url, expiration, dbName, storeName);
-    } catch (err) {
-        console.error('Failed to cache the image URL:', err);
-    }
-}
-
-async function getCachedImageUrl(filePath) {
-    const dbName = 'ImageCacheDB';
-    const storeName = 'ImageCacheStore';
-
-    try {
-        const entry = await getCacheEntry(filePath, dbName, storeName);
-        if (entry && entry.expiration > Date.now()) {
-            return entry.url;
-        }
-        return null; // Expired or not found
-    } catch (err) {
-        console.error('Failed to retrieve cached image URL:', err);
-        return null;
-    }
-}

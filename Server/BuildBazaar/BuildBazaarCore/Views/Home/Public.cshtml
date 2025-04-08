@@ -5,95 +5,10 @@
 
 <!DOCTYPE html>
 <head>
-
-    <link rel="stylesheet" type="text/css" href="~/css/jquery-ui.min.css">
-    <link rel="stylesheet" type="text/css" href="~/css/Site.css">
-    <link rel="stylesheet" type="text/css" href="~/css/toastr.min.css">
-    <link rel="stylesheet" type="text/css" href="~/css/BuildBazaar.css">
-    <link rel="icon" href="~/media/bazaar-logo.png" />
-
-    <script src="~/js/jquery-3.7.1.js"></script>
-    <script src="~/js/jquery-ui.js"></script>
-    <script src="~/js/jquery.validate.js"></script>
-    <script src="~/js/modernizr-2.8.3.js"></script>
-    <script src="~/js/toastr.min.js"></script>
-    <script src="~/js/buildbazaar-universal.js"></script>
     <script src="~/js/buildbazaar-shared.js"></script>
     <script src="~/js/buildbazaar-public.js"></script>
 </head>
 <body>
-    <div class="header">
-        <div class="buildBazaarHeader headerSection">
-            <div class="buildBazaarHeaderWrapper" onclick=logoClick();>
-                <img src="~/media/bazaar-logo.png">
-                <span>Build Bazaar</span>
-            </div>
-        </div>
-        <div id="poe-header" class="header-group">
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://poe.ninja/', '_blank');">
-                <img src="/media/ninja-logo.png">
-                <span>PoE Ninja</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://www.craftofexile.com/', '_blank');">
-                <img src="/media/coe-logo.ico">
-                <span>Craft of Exile</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://poedb.tw/', '_blank');">
-                <img src="/media/poedb-logo.png">
-                <span>PoE DB</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://www.poelab.com/', '_blank');">
-                <img src="/media/poelab-logo.png">
-                <span>PoE Lab</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://www.pathofexile.com/trade/', '_blank');">
-                <img src="/media/poe-logo.ico">
-                <span>Trade</span>
-            </div>
-        </div>
-        <div id="poe2-header" class="header-group">
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://orbwatch.trade', '_blank');">
-                <img src="/media/orbwatch-logo.png">
-                <span>Orb Watch</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://www.craftofexile.com/?game=poe2', '_blank');">
-                <img src="/media/coe-logo.ico">
-                <span>Craft of Exile</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://poe2db.tw/', '_blank');">
-                <img src="/media/poedb-logo.png">
-                <span>PoE DB</span>
-            </div>
-            <div class="headerSeparator"></div>
-            <div class="headerSection clickable" onclick="window.open('https://www.pathofexile.com/trade2/', '_blank');">
-                <img src="/media/poe-logo.ico">
-                <span>Trade</span>
-            </div>
-        </div>
-        <div class="headerSeparator"></div>
-        <div class="slider-wrapper">
-            <div class="slider hidden">
-                <div class="slider-button hidden"></div>
-                <div class="slider-option" data-value="1">PoE</div>
-                <div class="slider-option" data-value="2">PoE 2</div>
-            </div>
-        </div>
-        <div class="logoutHeader headerSection">
-            <div class="logoutWrapper" onclick="logout()">
-                <img id="logout-image" src="/media/logout.png" alt="Sign Out Icon">
-                <span id="logout-text">Log Out</span>
-            </div>
-        </div>
-    </div>
-
     <div id="content">        
         <div class="overlay"></div>
         <div id="main-row" class="row">

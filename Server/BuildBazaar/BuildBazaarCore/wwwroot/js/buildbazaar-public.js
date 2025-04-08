@@ -1,14 +1,6 @@
 ﻿async function populatePublicBuilds() {
     var userToken = localStorage.getItem('token');
-    var loggedIn = await validateUserToken();
     userName = window.location.pathname.split('/')[2];  // Get the username from the URL path
-
-    if (!loggedIn) {
-        $('#logout-image').attr('src', '/media/flyout.png');
-        $('#logout-image').css('height', '30px');
-        $('#logout-image').css('width', '45px');
-        $('#logout-text').text('Sign Up');
-    }   
 
     $.ajax({
         type: 'POST',
@@ -25,12 +17,16 @@
             }
             userName = result.userName;
             document.title = `${userName}'s Builds`;
-            
+
             var list = $('#sidebar-build-list');
+            var headerMenuList = $('#header-menu-list');
             var foundBuild = false;
             var currentBuildID = window.location.pathname.split('/')[3] || localStorage.buildID;
-            list.empty();
 
+            list.empty();
+            headerMenuList.find('li.build-item').remove();
+
+            var loggedIn = await validateUserToken();
             if (loggedIn) {
                 let li = $('<li>').addClass('build-item');
                 let copyOnClick = async function () {
@@ -70,6 +66,8 @@
                 let buildName = $('<h4>').text('Copy Build');
                 li.append(buildImg).append(buildName);
                 list.append(li);
+                let headerLi = li.clone(true);
+                headerMenuList.append(headerLi);
             }
 
             await populateImageCache(result.builds);
@@ -107,6 +105,8 @@
 
                 li.append(buildImg).append(buildName);
                 list.append(li);
+                let headerLi = li.clone(true);
+                headerMenuList.append(headerLi);
             };
 
             if (result.builds.length < 1 && !foundBuild) {
@@ -153,7 +153,7 @@ function closeActivePopup() {
 
 function initContextMenu() {
     let contextMenuBuildID = null;
-    
+
     $(document).on('contextmenu', '.build-item', function (e) {
         if (!$(this).data('buildID')) {
             // If no buildID exists, it's a utility button, so don't show the context menu
@@ -163,7 +163,7 @@ function initContextMenu() {
         e.preventDefault();  // Prevent the default right-click menu
 
         contextMenuBuildID = $(this).data('buildID');
-        
+
         // Position and show the context menu
         $('#build-context-menu').css({
             top: e.pageY + 'px',
@@ -186,7 +186,7 @@ function initContextMenu() {
         const publicUrl = `${window.location.origin}/Public/${userName}/${contextMenuBuildID}`;
         navigator.clipboard.writeText(publicUrl);
     });
-
+    return
 }
 
 let userName = "";
@@ -195,10 +195,10 @@ $(document).ready(function () {
     initToastrSettings();
     checkMobile();
     initSidebarToggle();
-    initSlider();
+    initHeaderSlider();
     initFilter();
     initContextMenu();
-    populatePublicBuilds();        
-    initDropdownAdjust();    
-   
+    populatePublicBuilds();
+    initDropdownAdjust();
+
 });

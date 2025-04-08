@@ -4,74 +4,76 @@
 
 <!DOCTYPE html>
 <head>
-    <link rel="stylesheet" type="text/css" href="~/css/BuildBazaar.css">
-    <link rel="stylesheet" type="text/css" href="~/css/jquery-ui.min.css">
-    <link rel="stylesheet" type="text/css" href="~/css/toastr.min.css">
-    <link rel="icon" href="~/media/bazaar-logo.png" />
-
-    <script src="~/js/jquery-3.7.1.js"></script>
-    <script src="~/js/jquery-ui.js"></script>
-    <script src="~/js/toastr.min.js"></script>
-    <script src="~/js/buildbazaar-universal.js"></script>
     <script src="~/js/buildbazaar-index.js"></script>
-    
-
-
-@*     <link rel="stylesheet" type="text/css" href="~/css/jquery-ui.min.css">
-    <link rel="stylesheet" type="text/css" href="~/css/Site.css">
-    <link rel="stylesheet" type="text/css" href="~/css/BuildBazaar.css">
-    <link rel="icon" href="~/Media/bazaar-logo.png" />
-
-    <script src="~/js/jquery-3.7.1.js"></script>
-    <script src="~/js/jquery-ui.js"></script>
-    <script src="~/js/jquery.validate.js"></script>
-    <script src="~/js/modernizr-2.8.3.js"></script>
-    <script src="~/js/buildbazaar-builds.js"></script> *@
 </head>
 <body class="index-content">
-    @* <div class="overlay"></div> *@
-    <div id="login-container">
-        <div class="titleText">Build Bazaar</div>
-        <form id="login-form" method="post">
-            <div class="login-group">
-                <label for="username">Username:</label>
-                <input id="username" type="text" required>
+    <div id="search-container">
+        <form id="search-form" method="post">
+            <div class="search-form-group">
+                <label for="search-buildname">Name: </label>
+                <input id="search-buildname" type="text" placeholder="Build Name">
             </div>
-            <div class="login-group">
-                <label for="password">Password:</label>
-                <input id="password" type="password" required>
+
+            <div class="search-form-group">
+                <label for="search-author">Author: </label>
+                <input id="search-author" type="text" placeholder="Author">
             </div>
-            <div class="forgot-password">
-                <a href="javascript:void(0);" onclick="showPasswordResetForm()">Forgot username or password?</a>
+
+            <div class="search-form-group">
+                <label for="search-class">Class:</label>
+                <select id="search-class" name="class">
+                    @*populate with db query*@
+                    <option value="0">Any Class</option>
+                </select>
             </div>
-            <div class="login-button-container buttons">
-                <button id="login-button" type="submit">Log In</button>
-                <button id="signup-button" type="button" onclick="showSignupForm()">Sign Up</button>
+             
+            <div class="search-form-group">
+                <label>Game: </label>
+                <div class="slider-wrapper" style="justify-content:left;">
+                    <div id="search-slider" class="slider">
+                        <div id="search-slider-button" class="slider-button"></div>
+                        <div class="search-slider-option active" data-value="1">PoE</div>
+                        <div class="search-slider-option" data-value="2">PoE 2</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-form-group">
+                <label for="search-sort">Sort by:</label>
+                <select id="search-sort">
+                    <option value="0">Newest</option>
+                    <option value="1">Oldest</option>
+                    @* <option value="2">Most Popular</option>
+                    <option value="3">Least Popular</option> *@
+                </select>
+            </div>
+            
+            <div class="search-form-group">
+                <label for="Tags">Tags: </label>
+                <input id="search-tags" type="text" placeholder="Tags (use commas to separate multiple tags)">
+            </div>
+
+            <div class="buttons">
+                <button id="search-submit" type="submit">Search</button>
+                <button id="search-reset" type="button">Reset</button>
             </div>
         </form>
     </div>
 
-    <div id="signup-form" class="popup-overlay">
-        <div class="popup-content">
-            <h2>Sign Up</h2>
-            <form id="new-user-form" method="post">
-                <div class="form-group">
-                    <label for="email">Email:</label><input id="new-email" type="email" required>
-                </div>
-                <div class="form-group">
-                    <label for="new-username">Username:</label><input id ="new-username" type="text" name="username" required>
-                </div>
-                <div class="form-group">
-                    <label for="new-password">Password:</label><input id="new-password" type="password" name="password" placeholder="Minimum of 8 characters" required>
-                </div>
-                <div class="buttons">
-                    <button id="signup-submit" type="submit">Sign up</button>
-                    <button id="signup-cancel" type="button" onclick="hideSignupForm()">Cancel</button>
-                </div>
-            </form>
+    <div id="results-container">
+        <div id="results-header">
+            <div class="results-column-header" data-sort="build">Build</div>
+            <div class="results-column-header" data-sort="author">Author</div>
+            <div class="results-column-header" data-sort="game">Game</div>
+            <div class="results-column-header" data-sort="class">Class</div>
+            <div class="results-column-header" data-sort="tags">Tags</div>
+        </div>
+        <div id="search-results">
+
         </div>
     </div>
 
+    
     <div id="password-reset-popup" class="popup-overlay">
         <div class="popup-content">
             <h2>Password Reset</h2>

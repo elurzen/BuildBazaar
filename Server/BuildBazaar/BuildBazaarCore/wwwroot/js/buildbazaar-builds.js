@@ -13,21 +13,26 @@ async function populateBuilds() {
                 return;
             }
             var list = $('#sidebar-build-list');
+            var headerMenuList = $('#header-menu-list');
             var foundBuild = false;
             var currentBuildID = window.location.pathname.split('/')[2] || localStorage.buildID;
 
             list.empty();
+            headerMenuList.find('li.build-item').remove();
 
             let li = $('<li>').addClass('build-item');
             li.on('click', async function () {
                 if (await checkEditing()) {
                     showAddBuildForm();
+                    $('#header-menu').hide();
                 }
             });
             let buildImg = $('<img>').attr('src', '/media/add-thumbnail.png').addClass('thumbnail');
             let buildName = $('<h4>').text('Create Build');
             li.append(buildImg).append(buildName);
             list.append(li);
+            let headerLi = li.clone(true);
+            headerMenuList.append(headerLi);
 
             await populateImageCache(result.builds);
 
@@ -48,7 +53,20 @@ async function populateBuilds() {
                         localStorage.setItem('buildID', buildID);
                         history.replaceState(null, '', `/Builds/${buildID}`);
                         $('#sidebar-build-list li').removeClass('selected-build');
-                        $(this).addClass('selected-build');
+                        $('#header-menu-list li').removeClass('selected-build');
+
+                        var selectedSidebarBuild = list.children().filter(function () {
+                            return $(this).data('buildID') == buildID;
+                        });
+                        selectedSidebarBuild.addClass('selected-build');
+
+                        var selectedHeaderBuild = headerMenuList.children().filter(function () {
+                            return $(this).data('buildID') == buildID;
+                        });
+                        selectedHeaderBuild.addClass('selected-build');
+                        
+                        $('#header-menu').hide();
+                        //$(this).addClass('selected-build');
                         populateNote();
                         populateReferenceImages();
                         populateBuildUrls();
@@ -68,6 +86,8 @@ async function populateBuilds() {
 
                 li.append(buildImg).append(buildName).append(editImg);
                 list.append(li);
+                let headerLi = li.clone(true);
+                headerMenuList.append(headerLi);
             };
 
             if (result.builds.length < 1 && !foundBuild) {
@@ -165,7 +185,7 @@ function initAddBuildForm() {
             })
             .always(function () {
                 enableForm($('#add-build-form'));
-                                
+
             });
     });
 
@@ -210,7 +230,7 @@ function initAddBuildForm() {
                 $('#add-build-thumbnail-preview').attr('src', e.target.result); // Show the uploaded image as preview
             };
             reader.readAsDataURL(file);
-        } 
+        }
     });
 }
 
@@ -276,7 +296,7 @@ function initEditBuildForm() {
             })
             .always(function () {
                 enableForm($('#edit-build-form'));
-            });       
+            });
     });
 
     $('#delete-build-button').off('click').on('click', async function () {
@@ -289,7 +309,7 @@ function initEditBuildForm() {
         var buildID = $('#edit-build-id').val();
         const confirmDelete = await showConfirmModal(`Are you sure you want to delete this build?`)
 
-        
+
         if (confirmDelete) {
             disableForm($('#edit-build-form'));
             $.ajax({
@@ -323,7 +343,7 @@ function initEditBuildForm() {
                 .always(function () {
                     enableForm($('#edit-build-form'));
                 });
-        }        
+        }
     });
 
     $('#edit-toggle-thumbnails').click(function () {
@@ -367,39 +387,6 @@ function initEditBuildForm() {
         }
     });
 }
-
-//function resizeImage(file, callback) {
-//    const reader = new FileReader();
-//    const maxWidth = 300;
-//    const maxHeight = 300;
-
-//    reader.onload = function (event) {
-//        const img = new Image();
-//        img.onload = function () {
-//            const aspectRatio = img.width / img.height;
-//            const canvas = document.createElement('canvas');
-//            const ctx = canvas.getContext('2d');
-
-//            if (img.width > img.height) {
-//                canvas.width = maxWidth;
-//                canvas.height = maxWidth / aspectRatio;
-//            } else {
-//                canvas.height = maxHeight;
-//                canvas.width = maxHeight * aspectRatio;
-//            }
-
-//            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-//            // Convert the canvas to a Blob
-//            canvas.toBlob(function (blob) {
-//                callback(blob); // Call the callback function with the resized blob
-//            }, 'image/jpeg', 1.0); // 100% quality
-//        };
-//        img.src = event.target.result;
-//    };
-
-//    reader.readAsDataURL(file);
-//}
 
 function initUploadReferenceImageForm() {
     $('#upload-reference-image-form').submit(function (event) {
@@ -474,7 +461,7 @@ function initAddUrlForm() {
     // Handle form submission
     $('#add-url-form').submit(function (event) {
         event.preventDefault(); // prevent form from submitting
-        
+
         var userToken = localStorage.getItem('token');
         if (userToken == null) {
             window.location.href = '/';
@@ -530,7 +517,7 @@ function initAddUrlForm() {
 function initEditUrlForm() {
     $('#edit-url-form').submit(function (event) {
         event.preventDefault(); // prevent form from submitting
-        
+
         var userToken = localStorage.getItem('token');
         if (userToken == null) {
             window.location.href = '/';
@@ -584,7 +571,7 @@ function initEditUrlForm() {
     });
 
     $('#delete-url-button').off('click').on('click', async function () {
-        
+
         var userToken = localStorage.getItem('token');
         if (!userToken) {
             window.location.href = '/';
@@ -594,7 +581,7 @@ function initEditUrlForm() {
 
         var buildUrlID = $('#hidden-build-url-id').val();
         const confirmDelete = await showConfirmModal(`Are you sure you want to delete this URL?`)
-        
+
         if (confirmDelete) {
             disableForm('#edit-url-form');
             $.ajax({
@@ -711,14 +698,14 @@ function toggleThumbnailButtonText(thumbnailButton, popup) {
 
 function showAddBuildForm() {
     $('body').addClass('noscroll');
-    resetAddBuildForm();    
+    resetAddBuildForm();
     $('#add-build-popup').show();
     $('#add-build-name').focus();
 }
 
 function hideAddBuildForm() {
     $('#add-build-popup').hide();
-    $('body').removeClass('noscroll'); 
+    $('body').removeClass('noscroll');
 }
 
 function resetAddBuildForm() {
@@ -727,7 +714,7 @@ function resetAddBuildForm() {
     $('#add-build-toggle-thumbnails').text('Select');
     $('#add-build-thumbnail-grid').hide();
     $('#add-build-content').removeClass('popup-expanded');
-    $('#add-build-thumbnail-preview').attr('src', '/media/question-mark.png');    
+    $('#add-build-thumbnail-preview').attr('src', '/media/question-mark.png');
 }
 
 async function showEditBuildForm(buildID, imageID, filePath, buildName, isPublic) {
@@ -738,7 +725,7 @@ async function showEditBuildForm(buildID, imageID, filePath, buildName, isPublic
     $('#edit-build-thumbnail-preview').attr('src', cachedFilePath);
     $('#edit-build-id').val(buildID);
     $('#edit-build-name').val(buildName);
-    $('#edit-isPublic-checkbox').prop('checked', isPublic);    
+    $('#edit-isPublic-checkbox').prop('checked', isPublic);
     $('#edit-build-popup').show();
     $('#edit-build-name').focus();
 }
@@ -922,10 +909,10 @@ function closeActivePopup() {
     }
 }
 
-function initContextMenu() {    
+function initContextMenu() {
     let contextMenuBuildID = null;
     let contextIsPublic = false;
-    
+
     $(document).on('contextmenu', '.build-item', function (e) {
         if (!$(this).data('buildID')) {
             // If no buildID exists, it's a utility button, so don't show the context menu
@@ -985,7 +972,8 @@ function initContextMenu() {
 }
 
 async function verifyToken() {
-    if (await !validateUserToken()) {
+    var loggedIn = await validateUserToken();
+    if (!loggedIn) {
         window.location.href = '/';
         toastr.error(`Please log in again`);
     }
@@ -995,16 +983,16 @@ async function verifyToken() {
 
 $(document).ready(function () {
     initToastrSettings();
-    verifyToken();    
+    verifyToken();
     checkMobile();
     initAddBuildForm();
     initEditBuildForm();
-    initUploadReferenceImageForm();  
+    initUploadReferenceImageForm();
     initNotesButtons();
     initAddUrlForm();
     initEditUrlForm();
     initSidebarToggle();
-    initSlider();
+    initHeaderSlider();
     initFilter();
     populateBuilds();
     initDropdownAdjust();

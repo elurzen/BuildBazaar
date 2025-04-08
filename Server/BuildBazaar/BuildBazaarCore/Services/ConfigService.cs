@@ -22,8 +22,18 @@ namespace BuildBazaarCore.Services
 
         public ConfigService()
         {
+            
             _environment = Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "local";
-            _awsRegion = Amazon.RegionEndpoint.GetBySystemName(Environment.GetEnvironmentVariable("AWS_REGION")) ?? Amazon.RegionEndpoint.USEast1;
+
+            var region = Environment.GetEnvironmentVariable("AWS_REGION");
+            if (region != null)
+            {
+                _awsRegion = Amazon.RegionEndpoint.GetBySystemName(region);
+            }
+            else
+            {
+                _awsRegion = Amazon.RegionEndpoint.USEast1;
+            }
             
         }
 

@@ -101,5 +101,18 @@ namespace BuildBazaarCore.Controllers
             var validatedToken = ValidateToken();
             return await _buildService.GetPublicBuilds(userName, validatedToken);
         }
+
+        [HttpPost]
+        public async Task<IActionResult> SearchBuilds(int page = 1, string sortBy = "newest")
+        {
+            return await _buildService.SearchBuilds(page, sortBy, Request.Form);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetSearchFormFields()
+        {
+            return await _buildService.GetSearchFormFields();
+        }
+
     }
 }
