@@ -63,9 +63,30 @@
             <h2>New Build</h2>
             <form id="add-build-form" method="post">
                 <img id="add-build-thumbnail-preview" class="thumbnail-preview" src="~/media/question-mark.png" />
+                <div class="form-group build-slider-row">
+                    <label>Game:</label>
+                    <div class="build-slider-wrapper">
+                        <div id="add-build-slider" class="slider">
+                            <div id="add-build-slider-button" class="slider-button" style="transform: translateX(0px);"></div>
+                            <div class="add-build-slider-option slider-option active" data-value="1" style="padding-left: 0px;">PoE</div>
+                            <div class="add-build-slider-option slider-option" data-value="2">PoE 2</div>
+                        </div>
+                    </div>
+                    <div class="build-public-wrapper">
+                        <label for="add-build-isPublic-checkbox">Public:</label>
+                        <input id="add-build-isPublic-checkbox" class="form-checkbox" type="checkbox">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label for="add-build-name">Build name:</label>
-                    <input id="add-build-name" type="text" class="build-name" maxlength=@MAX_NAME_LENGTH required>
+                    <input id="add-build-name" type="text" class="build-name" maxlength=@MAX_NAME_LENGTH autocomplete="off" required>
+                </div>
+                <div class="form-group">
+                    <label for="add-build-class">Class:</label>
+                    <select id="add-build-class" name="class" required>
+                        @*populate with db query*@
+                        <option value="">Select a Class</option>
+                    </select>
                 </div>
                 <div id="add-build-thumbnail-grid" class="thumbnail-grid" style="display:none">
                     <img src="~/media/thumbnails/126px-ascendant_avatar.png" class="thumbnail-option" data-filename="126px-ascendant_avatar.png" />
@@ -97,8 +118,8 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="add-build-isPublic-checkbox">Public:</label>
-                    <input id="add-build-isPublic-checkbox" class="form-checkbox" type="checkbox" />
+                    <label for="add-build-tags">Tags:</label>
+                    <input id="add-build-tags" type="text" class="tags tag-autocomplete" autocomplete="off">
                 </div>
                 <div class="buttons">
                     <button id="add-build-submit" type="submit">Create</button>
@@ -114,9 +135,30 @@
             <form id="edit-build-form" method="post">
                 <input id="edit-build-id" type="hidden">
                 <img id="edit-build-thumbnail-preview" class="thumbnail-preview" />
+                <div class="form-group build-slider-row">
+                    <label>Game:</label>
+                    <div class="build-slider-wrapper">
+                        <div id="edit-build-slider" class="slider">
+                            <div id="edit-build-slider-button" class="slider-button" style="transform: translateX(0px);"></div>
+                            <div class="edit-build-slider-option slider-option active" data-value="1" style="padding-left: 0px;">PoE</div>
+                            <div class="edit-build-slider-option slider-option" data-value="2">PoE 2</div>
+                        </div>
+                    </div>
+                    <div class="build-public-wrapper">
+                        <label for="edit-build-isPublic-checkbox">Public:</label>
+                        <input id="edit-build-isPublic-checkbox" class="form-checkbox" type="checkbox">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label for="edit-build-name">Build name:</label>
-                    <input id="edit-build-name"  type="text" class="build-name" maxlength=@MAX_NAME_LENGTH required>
+                    <input id="edit-build-name" type="text" class="build-name" maxlength=@MAX_NAME_LENGTH autocomplete="off" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-build-class">Class:</label>
+                    <select id="edit-build-class" name="class" required>
+                        @*populate with db query*@
+                        <option value="0">Select a Class</option>
+                    </select>
                 </div>
                 <div id="edit-build-thumbnail-grid" class="thumbnail-grid" style="display:none">
                     <img src="~/media/thumbnails/126px-ascendant_avatar.png" class="thumbnail-option" data-filename="126px-ascendant_avatar.png" />
@@ -148,8 +190,8 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="edit-isPublic-checkbox">Public:</label>
-                    <input id="edit-isPublic-checkbox" class="form-checkbox" type="checkbox" />
+                    <label for="edit-build-tags">Tags:</label>
+                    <input id="edit-build-tags" type="text" class="tags tag-autocomplete" autocomplete="off">
                 </div>
                 <div class="buttons">
                     <button id="edit-build-submit" type="submit">Update</button>

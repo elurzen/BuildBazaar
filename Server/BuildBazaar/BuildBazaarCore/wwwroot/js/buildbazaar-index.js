@@ -151,44 +151,6 @@ async function parseUrl() {
     $('#search-buildname').focus();
 }
 
-function initSearchSlider() {
-    const slider = $('#search-slider');
-    const button = $('#search-slider-button');
-    const options = $('.search-slider-option');
-    const classes = $('#search-class');
-
-    let activeSliderOption = parseInt(localStorage.getItem('searchSliderPosition')) || 0; // Tracks the current active option (0 = PoE, 1 = PoE 2)
-
-    const updateHeaderSlider = () => {
-        // Update active state
-        options.each(function (index) {
-            $(this).toggleClass('active', index === activeSliderOption);
-        });
-
-        classes.find('option:not(:first)').hide();
-        classes.find('option').filter(function () {
-            return $(this).data('game-id') === activeSliderOption+1 || $(this).val() === "0";
-        }).show();
-        classes.val("0");
-
-        // Move the slider button
-        const position = activeSliderOption === 0 ? 0 : (slider.width() / 2) - 1;
-        button.css('transform', `translateX(${position}px)`);
-    };
-
-    slider.on('click', function () {
-        // Toggle between the two options
-        activeSliderOption = activeSliderOption === 0 ? 1 : 0;
-        localStorage.setItem('searchSliderPosition', activeSliderOption);
-        updateHeaderSlider();
-    });
-
-    // Initialize the slider with the first option active
-    updateHeaderSlider();
-    slider.removeClass('hidden');
-    button.removeClass('hidden');
-}
-
 async function initSearchForm() {
     $("#search-form").on("submit", function (e) {
         e.preventDefault();
@@ -206,12 +168,13 @@ async function initSearchForm() {
         //fetchSearchResults(true);
     });
 
-    await populateSearchForm();
-    initSearchSlider();
+    //await populateSearchForm();
+    initSlider('search', 'searchSliderPosition', updateClassDropdown, 'search-class');
 
     // Infinite scroll
-    $(window).on("scroll", function () {
-        if ($(window).scrollTop() + $(window).height() > $(document).height() - 200) {
+    $(".body-content").on("scroll", function () {
+
+        if ($(this).scrollTop() + $(this).height() > $(this)[0].scrollHeight - 100) {            
             fetchSearchResults(false);
         }
     });
@@ -221,7 +184,8 @@ function populateSearchForm() {
     return new Promise((resolve, reject) => {
         $.ajax({
             type: 'POST',
-            url: '/Build/GetSearchFormFields'
+            url: '/Build/GetClassesAndTags',
+            data: { lastTagID: 10, lastClassID: 10 }
         })
             .done(function (result) {
                 if (!result.success) {
@@ -257,7 +221,9 @@ function fetchSearchResults(reset = false) {
         page = 1;
         $("#search-results").empty();
     }
-    
+
+    var selectedGame = localStorage.getItem('searchSliderPosition');
+    selectedGame = selectedGame ? parseInt(selectedGame) + 1 : $(".search-slider-option.active").data("value");
 
     const formData = new FormData();
     formData.append("page", page);
@@ -265,7 +231,7 @@ function fetchSearchResults(reset = false) {
     formData.append("buildName", $("#search-buildname").val());
     formData.append("author", $("#search-author").val());
     formData.append("classId", $("#search-class").val());
-    formData.append("gameId", $(".search-slider-option.active").data("value"));
+    formData.append("gameId", selectedGame);    
     formData.append("tags", $("#search-tags").val());
 
     $.ajax({
@@ -296,14 +262,14 @@ function fetchSearchResults(reset = false) {
 
                     let div = $(`
                         <div class="result-item" data-build-id="${build.buildID}">
-                            ${img.prop('outerHTML')}
-                            <div>${build.buildName}</div>
-                            <div>${build.userName}</div>
-                            <div>${build.gameName || "N/A"}</div>
-                            <div>${build.className || "N/A"}</div>
-                            <div>${build.tags ? build.tags.join(", ") : ""}</div>
+                            <div>${img.prop('outerHTML')}</div>
+                            <div class="hide-overflow">${build.buildName}</div>
+                            <div class="hide-overflow">${build.userName}</div>
+                            <div class="hide-overflow">${build.className || "N/A"}</div>
+                            <div class="hide-overflow">${build.tags || "No Tags"}</div>
                         </div>
                     `);
+                    //<div>${build.gameName || "N/A"}</div>
 
                     // Add click event to navigate to build details
                     div.on("click", function () {
@@ -325,7 +291,6 @@ function fetchSearchResults(reset = false) {
             isLoading = false;
         });
 }
-
 $(".column-header").click(function () {
     sortBy = $(this).data("sort");
     fetchSearchResults(true);

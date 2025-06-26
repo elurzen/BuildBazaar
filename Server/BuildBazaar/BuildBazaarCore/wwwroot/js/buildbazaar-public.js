@@ -195,7 +195,6 @@ $(document).ready(function () {
     initToastrSettings();
     checkMobile();
     initSidebarToggle();
-    initHeaderSlider();
     initFilter();
     initContextMenu();
     populatePublicBuilds();

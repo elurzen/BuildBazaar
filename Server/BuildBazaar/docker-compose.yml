@@ -1,4 +1,4 @@
-version: '3.4'
+# version: '3.4'
 
 services:
   buildbazaarcore:
@@ -6,6 +6,10 @@ services:
     build:
       context: .
       dockerfile: BuildBazaarCore/Dockerfile
+      args:
+        INCLUDE_DEBUGGER: "true"
+    ports:
+      - "4711:4711" #exposes netcoredbg
     networks:
       - bazaarnet
     environment:
@@ -24,6 +28,8 @@ services:
         CLOUDFRONT_PRIVATE_KEY: X
         CLOUDFRONT_KEY_PAIR_ID: X
         CLOUDFRONT_DISTRIBUTION_DOMAIN: X
+    command: >
+      netcoredbg --interpreter=vscode --server --port 4711 -- dotnet BuildBazaarCore.dll
   #Database
   db:
     platform: linux/x86_64

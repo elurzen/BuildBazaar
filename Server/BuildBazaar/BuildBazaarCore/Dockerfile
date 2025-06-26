@@ -22,6 +22,20 @@ RUN dotnet publish "./BuildBazaarCore.csproj" -c $BUILD_CONFIGURATION -o /app/pu
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+################ THIS IS FOR NVIM DEBUGGING ################
+ARG INCLUDE_DEBUGGER=false
+USER root
+
+RUN if [ "$INCLUDE_DEBUGGER" = "true" ]; then \
+      apt-get update && \
+      apt-get install -y curl unzip && \
+      curl -L https://github.com/Samsung/netcoredbg/releases/latest/download/netcoredbg-linux-amd64.tar.gz \
+      | tar -xz -C /usr/bin; \
+    fi
+USER app
+################ THIS IS FOR NVIM DEBUGGING ################
+
 ENTRYPOINT ["dotnet", "BuildBazaarCore.dll"]
 
 COPY ["BuildBazaarCore/wwwroot/media/thumbnails", "/app/wwwroot/media/thumbnails"]

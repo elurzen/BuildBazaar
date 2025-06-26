@@ -14,6 +14,6 @@ namespace BuildBazaarCore.Models
         public bool isPublic {get; set;}
         public string gameName { get; set; }
         public string className { get; set; }
-        //public string List<string> tags  { get; set; }
+        public string tags  { get; set; }
     }
 }

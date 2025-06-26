@@ -109,9 +109,9 @@ namespace BuildBazaarCore.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> GetSearchFormFields()
+        public async Task<IActionResult> GetClassesAndTags(int lastTagID = 0, int lastClassID = 0)
         {
-            return await _buildService.GetSearchFormFields();
+            return await _buildService.GetClassesAndTags(lastTagID, lastClassID);
         }
 
     }

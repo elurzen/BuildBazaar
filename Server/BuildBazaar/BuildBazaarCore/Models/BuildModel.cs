@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Amazon.Runtime;
+using System.ComponentModel.DataAnnotations;
 
 namespace BuildBazaarCore.Models
 {
@@ -11,5 +12,8 @@ namespace BuildBazaarCore.Models
         public string buildName { get; set; }
         public string filePath { get; set; }
         public bool isPublic {get; set;}
+        public uint gameID { get; set; }
+        public uint classID { get; set; }
+        public string tags { get; set; }
     }
 }

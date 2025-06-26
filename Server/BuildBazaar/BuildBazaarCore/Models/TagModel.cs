@@ -2,11 +2,11 @@
 
 namespace BuildBazaarCore.Models
 {
-    //public class TagModel
-    //{
-    //    [Key]
-    //    //public uint classID { get; set; }
-    //    //public string className { get; set; }
-    //    //public string gamdID { get; set; }
-    //}
+    public class TagModel
+    {
+        [Key]
+        public uint tagID { get; set; }
+        public string tagName { get; set; }
+        public uint gameID { get; set; }
+    }
 }

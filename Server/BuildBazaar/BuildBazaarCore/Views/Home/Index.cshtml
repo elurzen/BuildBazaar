@@ -23,7 +23,7 @@
                 <label for="search-class">Class:</label>
                 <select id="search-class" name="class">
                     @*populate with db query*@
-                    <option value="0">Any Class</option>
+                    <option value="">Any Class</option>
                 </select>
             </div>
              
@@ -31,9 +31,9 @@
                 <label>Game: </label>
                 <div class="slider-wrapper" style="justify-content:left;">
                     <div id="search-slider" class="slider">
-                        <div id="search-slider-button" class="slider-button"></div>
-                        <div class="search-slider-option active" data-value="1">PoE</div>
-                        <div class="search-slider-option" data-value="2">PoE 2</div>
+                        <div id="search-slider-button" class="slider-button hidden"></div>
+                        <div class="search-slider-option slider-option active" data-value="1">PoE</div>
+                        <div class="search-slider-option slider-option" data-value="2">PoE 2</div>
                     </div>
                 </div>
             </div>
@@ -50,7 +50,7 @@
             
             <div class="search-form-group">
                 <label for="Tags">Tags: </label>
-                <input id="search-tags" type="text" placeholder="Tags (use commas to separate multiple tags)">
+                <input id="search-tags" class="tag-autocomplete" type="text" placeholder="Tags (use commas to separate multiple tags)" autocomplete="off">
             </div>
 
             <div class="buttons">
@@ -64,7 +64,7 @@
         <div id="results-header">
             <div class="results-column-header" data-sort="build">Build</div>
             <div class="results-column-header" data-sort="author">Author</div>
-            <div class="results-column-header" data-sort="game">Game</div>
+            @* <div class="results-column-header" data-sort="game">Game</div> *@
             <div class="results-column-header" data-sort="class">Class</div>
             <div class="results-column-header" data-sort="tags">Tags</div>
         </div>

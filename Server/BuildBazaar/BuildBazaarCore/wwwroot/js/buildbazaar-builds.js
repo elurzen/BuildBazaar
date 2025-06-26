@@ -80,7 +80,7 @@ async function populateBuilds() {
                 let editImg = $('<img>').attr('src', '/media/edit.png').addClass('editImage').on('click', async function (e) {
                     e.stopPropagation();
                     if (await checkEditing()) {
-                        showEditBuildForm(record.buildID, record.imageID, record.filePath, record.buildName, record.isPublic)
+                        showEditBuildForm(record.buildID, record.imageID, record.filePath, record.buildName, record.isPublic, record.gameID, record.classID, record.tags)
                     }
                 });
 
@@ -114,8 +114,10 @@ async function populateBuilds() {
         });
 }
 
-function initAddBuildForm() {
+async function initAddBuildForm() {
     var selectedThumbnail = null;
+
+    initSlider('add-build', 'addBuildSliderPosition', updateClassDropdown, 'add-build-class',);
 
     // Handle form submission
     $('#add-build-form').submit(function (event) {
@@ -131,10 +133,19 @@ function initAddBuildForm() {
         var name = $('#add-build-name').val();
         var image = $('#add-build-upload')[0].files[0];
         var isPublic = $('#add-build-isPublic-checkbox').is(':checked');
-        var formData = new FormData();
+        var classID = $('#add-build-class').val();
+        var gameID = $('.add-build-slider-option.active').data('value');
+        var tags = $('#add-build-tags').val();
+        tags = tags.split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag !== ''); // trim & remove empty tags)
 
+        var formData = new FormData();
         formData.append('buildName', name);
         formData.append('isPublic', isPublic);
+        formData.append('classID', classID);
+        formData.append('gameID', gameID);
+        formData.append('tags', tags);
 
         // Check if a custom image is selected
         if (image) {
@@ -234,7 +245,45 @@ function initAddBuildForm() {
     });
 }
 
+function populateBuildForms() {
+    return new Promise((resolve, reject) => {
+        $.ajax({
+            type: 'POST',
+            url: '/Build/GetClassesAndTags'
+        })
+            .done(function (result) {
+                if (!result.success) {
+                    console.log(result.errorMessage);
+                    toastr.error('An error occurred, try again later.');
+                    reject(new Error(result.errorMessage));
+                    return;
+                }
+                var addBuildClassDropdown = $('#add-build-class');
+                var editBuildClassDropdown = $('#edit-build-class');
+                $.each(result.classes, function (index, classItem) {
+                    var addOption = $('<option></option>')
+                        .attr('value', classItem.classID)
+                        .attr('data-game-id', classItem.gameID)
+                        .text(classItem.className);
+
+                    var editOption = addOption.clone(true);
+
+                    addBuildClassDropdown.append(addOption);
+                    editBuildClassDropdown.append(editOption);
+                });
+                resolve();
+            })
+            .fail(function (xhr, status, error) {
+                console.log(error);
+                toastr.error('An error occurred, try again later.');
+                reject(error);
+            });
+    });
+}
+
 function initEditBuildForm() {
+    initSlider('edit-build', null, updateClassDropdown, 'edit-build-class',);
+
     $('#edit-build-form').off('submit').on('submit', function (event) {
         event.preventDefault(); // Prevent form from submitting        
 
@@ -248,12 +297,19 @@ function initEditBuildForm() {
         var buildID = $('#edit-build-id').val();
         var name = $('#edit-build-name').val();
         var image = $('#edit-build-image')[0].files[0];
-        var isPublic = $('#edit-isPublic-checkbox').is(':checked');
+        var classID = $('#edit-build-class').val();
+        var gameID = $('.edit-build-slider-option.active').data('value');
+        var tags = $('#edit-build-tags').val();
+        var isPublic = $('#edit-build-isPublic-checkbox').is(':checked');
         var formData = new FormData();
 
         formData.append('buildID', buildID);
         formData.append('buildName', name);
         formData.append('isPublic', isPublic);
+        formData.append('classID', classID);
+        formData.append('gameID', gameID);
+        formData.append('tags', tags);
+
 
         // Check if a custom image is selected
         if (image) {
@@ -698,6 +754,7 @@ function toggleThumbnailButtonText(thumbnailButton, popup) {
 
 function showAddBuildForm() {
     $('body').addClass('noscroll');
+    $('#header-menu').hide();
     resetAddBuildForm();
     $('#add-build-popup').show();
     $('#add-build-name').focus();
@@ -717,15 +774,21 @@ function resetAddBuildForm() {
     $('#add-build-thumbnail-preview').attr('src', '/media/question-mark.png');
 }
 
-async function showEditBuildForm(buildID, imageID, filePath, buildName, isPublic) {
+async function showEditBuildForm(buildID, imageID, filePath, buildName, isPublic, gameID, classID, tags) {
     $('body').addClass('noscroll');
+    $('#header-menu').hide();
     resetEditBuildForm();
     populateImageCache([{ imageID: imageID, filePath: filePath }])
     let cachedFilePath = await getCachedImageUrl(filePath) || '/media/question-mark.png';
     $('#edit-build-thumbnail-preview').attr('src', cachedFilePath);
     $('#edit-build-id').val(buildID);
     $('#edit-build-name').val(buildName);
-    $('#edit-isPublic-checkbox').prop('checked', isPublic);
+    var sliderSelection = $('.edit-build-slider-option.active').data('value')
+    if (gameID != sliderSelection)
+        $('#edit-build-slider').click();
+    $('#edit-build-class').val(classID);
+    $('#edit-build-tags').val(tags);
+    $('#edit-build-isPublic-checkbox').prop('checked', isPublic);    
     $('#edit-build-popup').show();
     $('#edit-build-name').focus();
 }
@@ -971,6 +1034,17 @@ function initContextMenu() {
 
 }
 
+//function positionAutocompleteBox(tagInput, autocompleteBox) {
+
+//    tagInput = tagInput[0]; // Get the DOM element from jQuery object
+//    autocompleteBox = autocompleteBox[0];
+
+//    autocompleteBox.style.position = "fixed";
+//    autocompleteBox.style.top = tagInput.offsetTop + tagInput.offsetHeight + "px";
+//    autocompleteBox.style.left = tagInput.offsetLeft + "px";
+//    autocompleteBox.style.width = tagInput.clientWidth + "px";
+//}
+
 async function verifyToken() {
     var loggedIn = await validateUserToken();
     if (!loggedIn) {
@@ -981,10 +1055,10 @@ async function verifyToken() {
 }
 
 
-$(document).ready(function () {
-    initToastrSettings();
+$(document).ready(async function () {
     verifyToken();
     checkMobile();
+    await populateBuildForms();
     initAddBuildForm();
     initEditBuildForm();
     initUploadReferenceImageForm();
@@ -992,7 +1066,6 @@ $(document).ready(function () {
     initAddUrlForm();
     initEditUrlForm();
     initSidebarToggle();
-    initHeaderSlider();
     initFilter();
     populateBuilds();
     initDropdownAdjust();
