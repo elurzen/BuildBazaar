@@ -204,28 +204,38 @@ namespace BuildBazaarCore.Services
 			
 				var tagParamNames = processedTags.Select((tag, i) => $"@tag{i}").ToList();
 				var inClause = string.Join(",", tagParamNames);
-					//test;
-
+				//test;
 				Dictionary<string, int> tagRecords = new Dictionary<string, int>();
-				if (processedTags.Count > 0)
+				try
 				{
-					var getTagsQuery = $"SELECT * FROM Tags WHERE tagName IN ({inClause}) AND gameID = @gameID)";
-					using (MySqlCommand command = new MySqlCommand(getTagsQuery, connection))
+					if (processedTags.Count > 0)
 					{
-						for(int i = 0; i < processedTags.Count; i++)
+						var getTagsQuery = $"SELECT * FROM Tags WHERE tagName IN ({inClause}) AND gameID = @gameID";
+						using (MySqlCommand command = new MySqlCommand(getTagsQuery, connection))
 						{
-							command.Parameters.AddWithValue(tagParamNames[i], processedTags[i]);
-						}
-						command.Parameters.AddWithValue("@gameID", build.gameID);
-
-						using (DbDataReader reader = await command.ExecuteReaderAsync())
-						{
-							while (reader.Read())
+							for (int i = 0; i < processedTags.Count; i++)
 							{
-								tagRecords.Add(Convert.ToString(reader["tagName"]), Convert.ToInt32(reader["tagID"]));
+								command.Parameters.AddWithValue(tagParamNames[i], processedTags[i]);
+							}
+							command.Parameters.AddWithValue("@gameID", build.gameID);
+
+							using (DbDataReader reader = await command.ExecuteReaderAsync())
+							{
+								while (reader.Read())
+								{
+									tagRecords.Add(Convert.ToString(reader["tagName"]), Convert.ToInt32(reader["tagID"]));
+								}
 							}
 						}
 					}
+				}
+				catch (DbException ex)
+				{
+					return Json(new { success = false, errorMessage = ex.Message });
+				}
+				catch (Exception ex)
+				{
+					return Json(new { success = false, errorMessage = ex.Message });
 				}
 
 				using (var transaction = await connection.BeginTransactionAsync())
