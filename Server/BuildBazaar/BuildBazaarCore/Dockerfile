@@ -13,7 +13,7 @@ COPY ["BuildBazaarCore/BuildBazaarCore.csproj", "BuildBazaarCore/"]
 RUN dotnet restore "./BuildBazaarCore/BuildBazaarCore.csproj"
 COPY . .
 WORKDIR "/src/BuildBazaarCore"
-RUN dotnet build "./BuildBazaarCore.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet bnild "./BuildBazaarCore.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
@@ -24,16 +24,11 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 ################ THIS IS FOR NVIM DEBUGGING ################
-ARG INCLUDE_DEBUGGER=false
-USER root
-
-RUN if [ "$INCLUDE_DEBUGGER" = "true" ]; then \
-      apt-get update && \
-      apt-get install -y curl unzip && \
-      curl -L https://github.com/Samsung/netcoredbg/releases/latest/download/netcoredbg-linux-amd64.tar.gz \
-      | tar -xz -C /usr/bin; \
-    fi
-USER app
+# ARG INCLUDE_DEBUGGER=false
+# RUN if ["$INCLUDE_DEBUGGER" = "true"];
+# 	COPY ["BuildBazaarCore/netcoredbg", "/usr/bin/netcoredbg"]
+# 	RUN ln -s /usr/bin/netcoredbg/netcoredbg /user/bin/netcoredbg
+# fi
 ################ THIS IS FOR NVIM DEBUGGING ################
 
 ENTRYPOINT ["dotnet", "BuildBazaarCore.dll"]

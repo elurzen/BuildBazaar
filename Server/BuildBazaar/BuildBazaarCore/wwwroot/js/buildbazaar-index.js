@@ -168,7 +168,7 @@ async function initSearchForm() {
         //fetchSearchResults(true);
     });
 
-    //await populateSearchForm();
+    await populateSearchForm();
     initSlider('search', 'searchSliderPosition', updateClassDropdown, 'search-class');
 
     // Infinite scroll

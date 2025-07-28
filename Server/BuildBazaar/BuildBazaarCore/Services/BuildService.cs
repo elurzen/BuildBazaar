@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 using Org.BouncyCastle.Asn1.Ocsp;
+using System.Data;
 using System.Data.Common;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -15,6 +16,7 @@ using Amazon.CloudFront.Model;
 using Org.BouncyCastle.Tls.Crypto;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Razor.TagHelpers;
+using System.Linq.Expressions;
 
 
 namespace BuildBazaarCore.Services
@@ -33,7 +35,7 @@ namespace BuildBazaarCore.Services
 	}
 
 	public class BuildService : BaseService, IBuildService
-	{   
+	{
 		private readonly IWebHostEnvironment _webHostEnvironment;
 		private readonly IConfigService _configService;
 		private readonly IAwsService _awsService;
@@ -191,53 +193,6 @@ namespace BuildBazaarCore.Services
 				uint userIDClaim = getUserIDFromToken(token);
 				await connection.OpenAsync();
 
-				if (build.tags == null)
-				{
-					build.tags = "";
-				}
-
-				var processedTags = build.tags.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-					.Select(t => t.ToLower())
-					.Distinct()
-					.Take(5)
-					.ToList();
-			
-				var tagParamNames = processedTags.Select((tag, i) => $"@tag{i}").ToList();
-				var inClause = string.Join(",", tagParamNames);
-				//test;
-				Dictionary<string, int> tagRecords = new Dictionary<string, int>();
-				try
-				{
-					if (processedTags.Count > 0)
-					{
-						var getTagsQuery = $"SELECT * FROM Tags WHERE tagName IN ({inClause}) AND gameID = @gameID";
-						using (MySqlCommand command = new MySqlCommand(getTagsQuery, connection))
-						{
-							for (int i = 0; i < processedTags.Count; i++)
-							{
-								command.Parameters.AddWithValue(tagParamNames[i], processedTags[i]);
-							}
-							command.Parameters.AddWithValue("@gameID", build.gameID);
-
-							using (DbDataReader reader = await command.ExecuteReaderAsync())
-							{
-								while (reader.Read())
-								{
-									tagRecords.Add(Convert.ToString(reader["tagName"]), Convert.ToInt32(reader["tagID"]));
-								}
-							}
-						}
-					}
-				}
-				catch (DbException ex)
-				{
-					return Json(new { success = false, errorMessage = ex.Message });
-				}
-				catch (Exception ex)
-				{
-					return Json(new { success = false, errorMessage = ex.Message });
-				}
-
 				using (var transaction = await connection.BeginTransactionAsync())
 				{
 					try
@@ -320,38 +275,32 @@ namespace BuildBazaarCore.Services
 							await command.ExecuteNonQueryAsync();
 						}
 
-						var insertTagQuery = "INSERT INTO Tags (tagName, gameID) VALUES (LOWER(@tagName), @gameID); SELECT LAST_INSERT_ID()";
+						if (build.tags == null)
+						{
+							build.tags = "";
+						}
+
+						var processedTags = build.tags.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+							.Select(t => t.ToLower())
+							.Distinct()
+							.Take(5)
+							.ToList();
+
+						// var tagParamNames = processedTags.Select((tag, i) => $"@tag{i}").ToList();
+						// var inClause = string.Join(",", tagParamNames);
+						var insertTagQuery = "INSERT INTO Tags (tagName, gameID) VALUES (LOWER(@tagName), @gameID) ON DUPLICATE KEY UPDATE tagID = LAST_INSERT_ID(tagID); SELECT LAST_INSERT_ID();";
+
 						var tagLinkValues = new List<string>();
 						var parameters = new List<MySqlParameter>();
 						int paramIndex = 0;
 						foreach (string tag in processedTags)
 						{
 							int tagID;
-							if (!tagRecords.ContainsKey(tag))
-							{         
-								try 
-								{ 
-									using (MySqlCommand command = new MySqlCommand(insertTagQuery, connection, transaction))
-									{
-										command.Parameters.AddWithValue("@tagName", tag);
-										command.Parameters.AddWithValue("@gameID", build.gameID);
-										tagID = Convert.ToInt32(await command.ExecuteScalarAsync());
-									}
-								}
-								catch (MySqlException ex) when (ex.Number == 1062) //catch duplicate error and get the tagID
-								{
-									var getTagIDQuery = "SELECT tagID FROM Tags WHERE tagName = @tagName AND gameID = @gameID";
-									using (var command = new MySqlCommand(getTagIDQuery, connection, transaction))
-									{
-										command.Parameters.AddWithValue("@tagName", tag);
-										command.Parameters.AddWithValue("@gameID", build.gameID);
-										tagID = Convert.ToInt32(await command.ExecuteScalarAsync());
-									}
-								}
-							}
-							else
+							using (MySqlCommand command = new MySqlCommand(insertTagQuery, connection, transaction))
 							{
-								tagID = tagRecords[tag];
+								command.Parameters.AddWithValue("@tagName", tag);
+								command.Parameters.AddWithValue("@gameID", build.gameID);
+								tagID = Convert.ToInt32(await command.ExecuteScalarAsync());
 							}
 
 							var buildIDParam = $"@buildID{paramIndex}";
@@ -420,7 +369,7 @@ namespace BuildBazaarCore.Services
 					var exampleImageFileName = "kirac.png";
 					var exampleUrlsFileName = "urls.csv";
 					var userImageFileName = $"{Guid.NewGuid()}.png"; // Generate a unique filename for the user's copy
-					var localExampleThumbnailFilePath = Path.Combine(_webHostEnvironment.ContentRootPath, "ExampleBuild", exampleImageFileName); 
+					var localExampleThumbnailFilePath = Path.Combine(_webHostEnvironment.ContentRootPath, "ExampleBuild", exampleImageFileName);
 					var localExampleUrlsFilePath = Path.Combine(_webHostEnvironment.ContentRootPath, "ExampleBuild", exampleUrlsFileName);
 					var fullExampleNotesFilePath = Path.Combine(_webHostEnvironment.ContentRootPath, "ExampleBuild", "notes.txt");
 					var s3UserThumbnailFilePath = $"Users/{userID}/Thumbnails/{userImageFileName}";
@@ -551,49 +500,6 @@ namespace BuildBazaarCore.Services
 							}
 						}
 
-
-						//TODO: this is getting too many tags, not just what's in the build.tags list
-
-						// Clean up the tags
-						List<string> tagList = build.tags.Split(',')
-							.Select(tag => tag.Trim().ToLower())
-							.Where(tag => !string.IsNullOrEmpty(tag))
-							.ToList();
-						build.tags = string.Join(",", tagList);
-
-						Dictionary<string, int> tagRecords = new Dictionary<string, int>();
-						if (!string.IsNullOrEmpty(build.tags))
-						{
-							var getTagsQuery = "SELECT * FROM Tags WHERE tagName IN (LOWER(@tagNames) AND gameID = @gameID)";
-							using (MySqlCommand command = new MySqlCommand(getTagsQuery, connection))
-							{
-								command.Parameters.AddWithValue("@tagNames", build.tags);
-								command.Parameters.AddWithValue("@gameID", build.gameID);
-								using (DbDataReader reader = await command.ExecuteReaderAsync())
-								{
-									while (reader.Read())
-									{
-										tagRecords.Add(Convert.ToString(reader["tagName"]), Convert.ToInt32(reader["tagID"]));
-									}
-								}
-							}
-						}
-
-						HashSet<int> tagLinkRecords = new HashSet<int>();
-						var getBuildTagsLinksQuery = "SELECT tagID FROM BuildTagLinks WHERE buildID = @buildID";
-						using (MySqlCommand command = new MySqlCommand(getBuildTagsLinksQuery, connection))
-						{
-							command.Parameters.AddWithValue("@buildID", build.buildID);
-							using (DbDataReader reader = await command.ExecuteReaderAsync())
-							{
-								while (reader.Read())
-								{
-									tagLinkRecords.Add(Convert.ToInt32(reader["tagID"]));
-								}
-							}
-						}
-
-
 						// Update build name if provided
 						var updateBuildQuery = @"UPDATE Builds SET buildName = @buildName, isPublic = @isPublic, gameID = @gameID, classID = @classID 
 							WHERE buildID = @buildID AND userID = @userID";
@@ -603,7 +509,7 @@ namespace BuildBazaarCore.Services
 							command.Parameters.AddWithValue("@isPublic", build.isPublic);
 							command.Parameters.AddWithValue("@gameID", build.gameID);
 							command.Parameters.AddWithValue("@classID", build.classID);
-							command.Parameters.AddWithValue("@buildID", build.buildID);                            
+							command.Parameters.AddWithValue("@buildID", build.buildID);
 							command.Parameters.AddWithValue("@userID", userIDClaim);
 							await command.ExecuteNonQueryAsync();
 						}
@@ -635,57 +541,52 @@ namespace BuildBazaarCore.Services
 								command.Parameters.AddWithValue("@buildID", build.buildID);
 								command.Parameters.AddWithValue("@userID", userIDClaim);
 								await command.ExecuteNonQueryAsync();
-							}                            
+							}
 						}
 
-						var insertTagQuery = "INSERT INTO Tags (tagName, gameID) VALUES (LOWER(@tagName), @gameID); SELECT LAST_INSERT_ID()";
+						if (build.tags == null)
+						{
+							build.tags = "";
+						}
+
+						var processedTags = build.tags.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+							.Select(t => t.ToLower())
+							.Distinct()
+							.Take(5)
+							.ToList();
+
+						var insertTagQuery = "INSERT INTO Tags (tagName, gameID) VALUES (LOWER(@tagName), @gameID) ON DUPLICATE KEY UPDATE tagID = LAST_INSERT_ID(tagID); SELECT LAST_INSERT_ID();";
+
 						var tagLinkValues = new List<string>();
 						var parameters = new List<MySqlParameter>();
 						int paramIndex = 0;
-						foreach (string tag in build.tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
+						foreach (string tag in processedTags)
 						{
-							var trimmedTag = tag.Trim();
 							int tagID;
-							if (!tagRecords.ContainsKey(trimmedTag))
+							using (MySqlCommand command = new MySqlCommand(insertTagQuery, connection, transaction))
 							{
-								try
-								{
-									using (MySqlCommand command = new MySqlCommand(insertTagQuery, connection, transaction))
-									{
-										command.Parameters.AddWithValue("@tagName", trimmedTag);
-										command.Parameters.AddWithValue("@gameID", build.gameID);
-										tagID = Convert.ToInt32(await command.ExecuteScalarAsync());
-									}
-								}
-								catch (MySqlException ex) when (ex.Number == 1062) //catch duplicate error and get the tagID
-								{
-									var getTagIDQuery = "SELECT tagID FROM Tags WHERE tagName = @tagName AND gameID = @gameID";
-									using (var command = new MySqlCommand(getTagIDQuery, connection, transaction))
-									{
-										command.Parameters.AddWithValue("@tagName", trimmedTag);
-										command.Parameters.AddWithValue("@gameID", build.gameID);
-										tagID = Convert.ToInt32(await command.ExecuteScalarAsync());
-									}
-								}
-							}
-							else
-							{
-								tagID = tagRecords[trimmedTag];
+								command.Parameters.AddWithValue("@tagName", tag);
+								command.Parameters.AddWithValue("@gameID", build.gameID);
+								tagID = Convert.ToInt32(await command.ExecuteScalarAsync());
 							}
 
-							if (!tagLinkRecords.Contains(tagID))
-							{
-								var buildIDParam = $"@buildID{paramIndex}";
-								var tagIDParam = $"@tagID{paramIndex}";
-								tagLinkValues.Add($"({buildIDParam}, {tagIDParam})");
-								tagLinkRecords.Add(tagID);
+							var buildIDParam = $"@buildID{paramIndex}";
+							var tagIDParam = $"@tagID{paramIndex}";
+							tagLinkValues.Add($"({buildIDParam}, {tagIDParam})");
+							//tagLinkRecords.Add(tagID);
 
-								parameters.Add(new MySqlParameter(buildIDParam, build.buildID));
-								parameters.Add(new MySqlParameter(tagIDParam, tagID));
+							parameters.Add(new MySqlParameter(buildIDParam, build.buildID));
+							parameters.Add(new MySqlParameter(tagIDParam, tagID));
 
-								paramIndex++;
-							}
+							paramIndex++;
+						}
 
+						// Delete existing tags that are not in the new list
+						var deleteTagsQuery = @"DELETE FROM BuildTagLinks WHERE buildID = @buildID;";
+						using (MySqlCommand command = new MySqlCommand(deleteTagsQuery, connection, transaction))
+						{
+							command.Parameters.AddWithValue("@buildID", build.buildID);
+							await command.ExecuteNonQueryAsync();
 						}
 
 						if (tagLinkValues.Any())
@@ -696,20 +597,6 @@ namespace BuildBazaarCore.Services
 								command.Parameters.AddRange(parameters.ToArray());
 								await command.ExecuteNonQueryAsync();
 							}
-
-
-						}
-
-						//var tag
-						// Delete existing tags that are not in the new list
-						var deleteTagsQuery = @"DELETE btl FROM BuildTagLinks btl 
-							LEFT JOIN Tags t ON btl.tagID = t.tagID 
-							WHERE btl.buildID = @buildID AND NOT FIND_IN_SET (LOWER(t.tagName), LOWER(@tagNames))";
-						using (MySqlCommand command = new MySqlCommand(deleteTagsQuery, connection, transaction))
-						{
-							command.Parameters.AddWithValue("@buildID", build.buildID);
-							command.Parameters.AddWithValue("@tagNames", build.tags);
-							await command.ExecuteNonQueryAsync();
 						}
 
 						// Update build image if provided
@@ -1075,111 +962,186 @@ namespace BuildBazaarCore.Services
 			}
 		}
 
+		//public async Task<IActionResult> SearchBuilds(int page, string sortBy, IFormCollection request)
+		//{
+		//	try
+		//	{
+		//		List<BuildSearchModel> builds = new List<BuildSearchModel>();
+		//		using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+		//		{
+		//			int offset = (page - 1 ) * 20;
+		//			connection.Open();
+		//			string query = @"
+		//				SELECT b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
+		//				FROM Builds b 
+		//				JOIN Images i ON i.buildID = b.buildID 
+		//				JOIN Users u ON u.userID = b.userID 
+		//				LEFT JOIN Classes c ON c.classID = b.classID
+		//				LEFT JOIN Games g ON g.gameID = b.gameID
+		//				LEFT JOIN BuildTagLinks btl ON btl.buildID = b.buildID
+		//				LEFT JOIN Tags t ON t.tagID = btl.tagID
+		//				WHERE b.isPublic = 1 
+		//				AND b.gameID = @gameID
+		//				AND i.typeID = 1"
+		//				;
+
+
+
+
+
+		//			//@"
+		//			//    SELECT b.buildID, b.buildName, b.userID, i.filePath, u.userName, 
+		//			//           g.gameName, c.className, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
+		//			//    FROM Builds b 
+		//			//    JOIN Images i ON i.buildID = b.buildID 
+		//			//    JOIN Users u ON u.userID = b.userID 
+		//			//    LEFT JOIN Games g ON g.gameID = b.gameID
+		//			//    LEFT JOIN Classes c ON c.classID = b.classID
+		//			//    LEFT JOIN BuildTags bt ON bt.buildID = b.buildID
+		//			//    LEFT JOIN Tags t ON t.tagID = bt.tagID
+		//			//    WHERE b.isPublic = 1 
+		//			//    AND i.typeID = 1 ";
+
+		//			if (!string.IsNullOrEmpty(request["buildName"]))
+		//				query += " AND LOWER(b.buildName) LIKE LOWER(@buildName) ";
+
+		//			if (!string.IsNullOrEmpty(request["author"]))
+		//				query += " AND LOWER(u.userName) LIKE LOWER(@author) ";
+
+		//			if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
+		//				query += " AND b.classID = @classID ";
+
+		//			//if (request["gameID"] != "0" && !string.IsNullOrEmpty(request["gameID"]))
+		//			//    query += " AND b.gameID = @gameId ";
+
+		//			if (!string.IsNullOrEmpty(request["tags"]))
+		//			{
+		//				var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+
+		//				// For each tag, we'll count if it exists for the build
+		//				for (int i = 0; i < tagsList.Count; i++)
+		//				{
+		//					// Create a subquery condition for each tag
+		//					query += $" AND EXISTS (SELECT 1 FROM BuildTagLinks btl{i} " +
+		//						$"JOIN Tags t{i} ON t{i}.tagID = btl{i}.tagID " +
+		//						$"WHERE btl{i}.buildID = b.buildID AND t{i}.tagName = LOWER(@tag{i}))";
+		//				}
+		//			}
+
+		//			//query += " AND t.tagName IN (@tags) ";
+
+		//			// Group by to handle the tag concatenation
+		//			query += " GROUP BY b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName ";
+
+		//			// Add sorting
+		//			query += @" ORDER BY 
+		//				CASE WHEN @sortBy = 'newest' THEN b.buildID END DESC,
+		//			CASE WHEN @sortBy = 'oldest' THEN b.buildID END ASC
+		//				LIMIT 20 OFFSET @offset";
+
+		//			using (MySqlCommand command = new MySqlCommand(query, connection))
+		//			{
+		//				command.Parameters.AddWithValue("@offset", offset);
+		//				command.Parameters.AddWithValue("@sortBy", sortBy);
+		//				command.Parameters.AddWithValue("@gameID", request["gameId"]);
+
+		//				// Add parameters for search filters
+		//				if (!string.IsNullOrEmpty(request["buildName"]))
+		//					command.Parameters.AddWithValue("@buildName", "%" + request["buildName"] + "%");
+
+		//				if (!string.IsNullOrEmpty(request["author"]))
+		//					command.Parameters.AddWithValue("@author", "%" + request["author"] + "%");
+
+		//				if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
+		//					command.Parameters.AddWithValue("@classID", request["classId"]);
+
+		//				if (!string.IsNullOrEmpty(request["tags"]))
+		//				{
+		//					var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+		//					for (int i = 0; i < tagsList.Count; i++)
+		//					{
+		//						command.Parameters.AddWithValue($"@tag{i}", tagsList[i]);
+		//					}
+		//				}
+
+		//				using (DbDataReader reader = await command.ExecuteReaderAsync())
+		//				{
+		//					while (reader.Read())
+		//					{
+		//						BuildSearchModel build = new BuildSearchModel
+		//						{
+		//							buildID = Convert.ToUInt32(reader["buildID"]),
+		//							buildName = Convert.ToString(reader["buildName"]),
+		//							userID = Convert.ToUInt32(reader["userID"]),
+		//							userName = Convert.ToString(reader["userName"]),
+		//							filePath = Convert.ToString(reader["filePath"]),
+		//							gameName = Convert.ToString(reader["gameName"]),
+		//							className = Convert.ToString(reader["className"]),
+		//							tags = Convert.ToString(reader["tags"])
+		//						};
+		//						builds.Add(build);
+		//					}
+		//				}
+		//			}
+		//		}
+		//		return Json(new { success = true, builds });
+		//	}
+		//	catch (MySqlException ex)
+		//	{
+		//		return Json(new { success = false, errorMessage = ex.Message });
+		//	}
+		//}
+
 		public async Task<IActionResult> SearchBuilds(int page, string sortBy, IFormCollection request)
 		{
 			try
 			{
-				List<BuildSearchModel> builds = new List<BuildSearchModel>();
-				using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-				{
-					int offset = (page - 1 ) * 20;
-					connection.Open();
-					string query = @"
-						SELECT b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
-						FROM Builds b 
-						JOIN Images i ON i.buildID = b.buildID 
-						JOIN Users u ON u.userID = b.userID 
-						LEFT JOIN Classes c ON c.classID = b.classID
-						LEFT JOIN Games g ON g.gameID = b.gameID
-						LEFT JOIN BuildTagLinks btl ON btl.buildID = b.buildID
-						LEFT JOIN Tags t ON t.tagID = btl.tagID
-						WHERE b.isPublic = 1 
-						AND b.gameID = @gameID
-						AND i.typeID = 1"
-						;
+				List<BuildSearchModel> builds = new();
 
+                using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
+                {
+                    await connection.OpenAsync();
 
-
-
-
-					//@"
-					//    SELECT b.buildID, b.buildName, b.userID, i.filePath, u.userName, 
-					//           g.gameName, c.className, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
-					//    FROM Builds b 
-					//    JOIN Images i ON i.buildID = b.buildID 
-					//    JOIN Users u ON u.userID = b.userID 
-					//    LEFT JOIN Games g ON g.gameID = b.gameID
-					//    LEFT JOIN Classes c ON c.classID = b.classID
-					//    LEFT JOIN BuildTags bt ON bt.buildID = b.buildID
-					//    LEFT JOIN Tags t ON t.tagID = bt.tagID
-					//    WHERE b.isPublic = 1 
-					//    AND i.typeID = 1 ";
-
-					if (!string.IsNullOrEmpty(request["buildName"]))
-						query += " AND LOWER(b.buildName) LIKE LOWER(@buildName) ";
-
-					if (!string.IsNullOrEmpty(request["author"]))
-						query += " AND LOWER(u.userName) LIKE LOWER(@author) ";
-
-					if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
-						query += " AND b.classID = @classID ";
-
-					//if (request["gameID"] != "0" && !string.IsNullOrEmpty(request["gameID"]))
-					//    query += " AND b.gameID = @gameId ";
-
-					if (!string.IsNullOrEmpty(request["tags"]))
+                    using (MySqlCommand command = new MySqlCommand("sp_SearchBuilds", connection))
 					{
-						var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
+						command.CommandType = CommandType.StoredProcedure;
 
-						// For each tag, we'll count if it exists for the build
-						for (int i = 0; i < tagsList.Count; i++)
-						{
-							// Create a subquery condition for each tag
-							query += $" AND EXISTS (SELECT 1 FROM BuildTagLinks btl{i} " +
-								$"JOIN Tags t{i} ON t{i}.tagID = btl{i}.tagID " +
-								$"WHERE btl{i}.buildID = b.buildID AND t{i}.tagName = LOWER(@tag{i}))";
-						}
-					}
+						string GetFormValue(string key) => request.TryGetValue(key, out var values) ? values.FirstOrDefault() : null;
 
-					//query += " AND t.tagName IN (@tags) ";
+						var tagList = (GetFormValue("tags") ?? "")
+							.ToString()
+							.Split(',', StringSplitOptions.RemoveEmptyEntries)
+							.Select(t => t.Trim())
+							.Where(t => !string.IsNullOrEmpty(t))
+							.Take(5)
+							.ToArray();
 
-					// Group by to handle the tag concatenation
-					query += " GROUP BY b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName ";
+						// Add all parameters to stored procedure
+						command.Parameters.AddWithValue("@p_gameID", 
+								int.TryParse(GetFormValue("gameId"), out int gameId) ? gameId : 1);
 
-					// Add sorting
-					query += @" ORDER BY 
-						CASE WHEN @sortBy = 'newest' THEN b.buildID END DESC,
-					CASE WHEN @sortBy = 'oldest' THEN b.buildID END ASC
-						LIMIT 20 OFFSET @offset";
+						command.Parameters.AddWithValue("@p_buildName", 
+								string.IsNullOrEmpty(GetFormValue("buildName")) ? DBNull.Value : GetFormValue("buildName"));
 
-					using (MySqlCommand command = new MySqlCommand(query, connection))
-					{
-						command.Parameters.AddWithValue("@offset", offset);
-						command.Parameters.AddWithValue("@sortBy", sortBy);
-						command.Parameters.AddWithValue("@gameID", request["gameId"]);
+						command.Parameters.AddWithValue("@p_author", 
+								string.IsNullOrEmpty(GetFormValue("author")) ? DBNull.Value : GetFormValue("author"));
 
-						// Add parameters for search filters
-						if (!string.IsNullOrEmpty(request["buildName"]))
-							command.Parameters.AddWithValue("@buildName", "%" + request["buildName"] + "%");
+						command.Parameters.AddWithValue("@p_classID", 
+								int.TryParse(GetFormValue("classId"), out int classId) && classId != 0 ? classId : 0);
 
-						if (!string.IsNullOrEmpty(request["author"]))
-							command.Parameters.AddWithValue("@author", "%" + request["author"] + "%");
+						// Add individual tag parameters (null if not provided)
+						command.Parameters.AddWithValue("@p_tag1", tagList.Length > 0 ? tagList[0] : DBNull.Value);
+						command.Parameters.AddWithValue("@p_tag2", tagList.Length > 1 ? tagList[1] : DBNull.Value);
+						command.Parameters.AddWithValue("@p_tag3", tagList.Length > 2 ? tagList[2] : DBNull.Value);
+						command.Parameters.AddWithValue("@p_tag4", tagList.Length > 3 ? tagList[3] : DBNull.Value);
+						command.Parameters.AddWithValue("@p_tag5", tagList.Length > 4 ? tagList[4] : DBNull.Value);
 
-						if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
-							command.Parameters.AddWithValue("@classID", request["classId"]);
-
-						if (!string.IsNullOrEmpty(request["tags"]))
-						{
-							var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
-							for (int i = 0; i < tagsList.Count; i++)
-							{
-								command.Parameters.AddWithValue($"@tag{i}", tagsList[i]);
-							}
-						}
+						command.Parameters.AddWithValue("@p_sortBy", sortBy ?? "newest");
+						command.Parameters.AddWithValue("@p_page", page);
 
 						using (DbDataReader reader = await command.ExecuteReaderAsync())
 						{
-							while (reader.Read())
+							while (await reader.ReadAsync())
 							{
 								BuildSearchModel build = new BuildSearchModel
 								{
@@ -1197,14 +1159,14 @@ namespace BuildBazaarCore.Services
 						}
 					}
 				}
-				return Json(new { success = true, builds });
+				
+				return Json(new {success = true, builds});
 			}
-			catch (MySqlException ex)
+			catch(Exception ex)
 			{
 				return Json(new { success = false, errorMessage = ex.Message });
-			}
+			}			
 		}
-
 		public async Task<IActionResult> GetClassesAndTags(int lastTagID = 0, int lastClassID = 0)
 		{
 			using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))

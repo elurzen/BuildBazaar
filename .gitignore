@@ -410,3 +410,5 @@ Server/BuildBazaar/BuildBazaarCore/Certificates/us-east-1-bundle.pem
 Server/BuildBazaar/docker run.bat
 BuildBazaarTerraform/Vars/dev.tfvars
 BuildBazaarTerraform/Vars/prod.tfvars
+Server/BuildBazaar/BuildBazaarCore/netcoredbg
+BuildBazaarTerraform.from transfer
