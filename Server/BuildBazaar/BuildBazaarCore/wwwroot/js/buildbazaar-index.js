@@ -252,7 +252,7 @@ function fetchSearchResults(reset = false) {
 				return;
 			}
 
-			await populateImageCache(result.builds);
+			await populateImageCache(data.builds);
 
 			data.builds.forEach(build => {
 				getCachedImageUrl(build.filePath).then(cachedFilePath => {

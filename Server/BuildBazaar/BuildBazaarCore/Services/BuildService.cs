@@ -1030,11 +1030,13 @@ namespace BuildBazaarCore.Services
 									buildID = Convert.ToUInt32(reader["buildID"]),
 									buildName = Convert.ToString(reader["buildName"]),
 									userID = Convert.ToUInt32(reader["userID"]),
+									imageID = Convert.ToUInt32(reader["imageID"]),
 									userName = Convert.ToString(reader["userName"]),
 									filePath = Convert.ToString(reader["filePath"]),
 									gameName = Convert.ToString(reader["gameName"]),
 									className = Convert.ToString(reader["className"]),
-									tags = Convert.ToString(reader["tags"])
+									tags = Convert.ToString(reader["tags"]),
+									isPublic = true
 								};
 								builds.Add(build);
 							}

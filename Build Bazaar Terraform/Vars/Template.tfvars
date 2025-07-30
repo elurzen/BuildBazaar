@@ -1,0 +1,10 @@
+environment = "" # Environment name ("dev", "prod", etc)
+docker_image = "" # Name of docker image containing the web server (DockerRepo/Image:version)
+vpc_cidr_block = "" # CIDR block of VPC ("10.0.0.0/16")
+subnet_cidr_blocks = ["", "", "", ""] # Subnet CIDR blocks - Array of 4 CIDR blocks, first 2 are used for public subnets, second 2 are used for private subnets ("10.1.4.0/24")
+db_username = "" # username for mysql rds
+db_password = "" # password for mysql rds
+aws_region = "us-east-1" # AWS region to deploy solution in, currently only works in us-east-1
+certificate_arn = "" # ARN of the SSL certificate for the site, be sure to include a "cdn.[DomainName]" prefix record
+domain_name = "" # Domain name of the site
+r53_hosted_zone_id = "" # Route 53 Hosted Zone ID associated with the domain

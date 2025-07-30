@@ -144,10 +144,10 @@ resource "aws_egress_only_internet_gateway" "buildbazaar_eigw" {
     tomap({ "Name" = "BuildBazaar-eigw-${var.environment}" })
   )
 }
-resource "aws_eip" "ipv6_eip" {
-  domain               = "vpc"
-  network_border_group = "us-east-1"
-}
+# resource "aws_eip" "ipv6_eip" {
+#   domain               = "vpc"
+#   network_border_group = "us-east-1"
+# }
 
 resource "aws_vpc_endpoint" "buildbazaar_vpc_endpoint_s3" {
   vpc_id            = aws_vpc.buildbazaar_vpc.id
@@ -500,7 +500,8 @@ resource "aws_lb" "buildbazaar_alb" {
     aws_subnet.buildbazaar_subnet_public2.id
   ]
 
-  ip_address_type = "dualstack"
+  # ip_address_type = "dualstack"
+  ip_address_type = "dualstack-without-public-ipv4"
 
   tags = merge(
     local.commonTags,
@@ -601,6 +602,42 @@ resource "aws_route53_record" "cdn_record" {
 resource "aws_route53_record" "buildbazaar_route53_record2" {
   name    = "www.${var.domain_name}"
   type    = "A"
+  zone_id = var.r53_hosted_zone_id
+
+  alias {
+    evaluate_target_health = true
+    name                   = aws_lb.buildbazaar_alb.dns_name
+    zone_id                = aws_lb.buildbazaar_alb.zone_id
+  }
+}
+
+resource "aws_route53_record" "buildbazaar_route53_AAAA_record_1" {
+  name    = var.domain_name
+  type    = "AAAA"
+  zone_id = var.r53_hosted_zone_id
+
+  alias {
+    evaluate_target_health = true
+    name                   = aws_lb.buildbazaar_alb.dns_name
+    zone_id                = aws_lb.buildbazaar_alb.zone_id
+  }
+}
+
+resource "aws_route53_record" "cdn_AAAA_record" {
+  name    = "cdn.${var.domain_name}"
+  type    = "AAAA"
+  zone_id = var.r53_hosted_zone_id
+
+  alias {
+    evaluate_target_health = false
+    name                   = aws_cloudfront_distribution.s3_distribution.domain_name
+    zone_id                = aws_cloudfront_distribution.s3_distribution.hosted_zone_id
+  }
+}
+
+resource "aws_route53_record" "buildbazaar_route53_AAAA_record2" {
+  name    = "www.${var.domain_name}"
+  type    = "AAAA"
   zone_id = var.r53_hosted_zone_id
 
   alias {
