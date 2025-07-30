@@ -164,11 +164,11 @@ resource "aws_vpc_endpoint" "buildbazaar_vpc_endpoint_s3" {
 
 resource "aws_route_table" "buildbazaar_rtb_private" {
   vpc_id = aws_vpc.buildbazaar_vpc.id
-  #   route {
-  #     cidr_block = "0.0.0.0/0"
-  #     #nat_gateway_id = aws_nat_gateway.buildbazaar_nat_gateway.id
-  #     network_interface_id = aws_instance.nat_instance.primary_network_interface_id
-  #   }
+  route {
+    cidr_block = "0.0.0.0/0"
+    #nat_gateway_id = aws_nat_gateway.buildbazaar_nat_gateway.id
+    network_interface_id = aws_instance.nat_instance.primary_network_interface_id
+  }
   route {
     ipv6_cidr_block        = "::/0"
     egress_only_gateway_id = aws_egress_only_internet_gateway.buildbazaar_eigw.id
@@ -369,28 +369,28 @@ resource "aws_security_group" "rds_ec2_sg" {
   )
 }
 
-# resource "aws_security_group" "nat_sg" {
-#   name = "BuildBazaar-nat-sg-${var.environment}"
-#   vpc_id = aws_vpc.buildbazaar_vpc.id
-#
-#   ingress {
-#     from_port = 0
-#     to_port = 0
-#     protocol = "-1"
-#     cidr_blocks = [aws_subnet.buildbazaar_subnet_private1.cidr_block, aws_subnet.buildbazaar_subnet_private2.cidr_block]
-#   }
-#
-#   egress {
-#     from_port = 0
-#     to_port = 0
-#     protocol = "-1"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
-# 	tags = merge(
-#     local.commonTags,
-#     tomap({"Name" = "BuildBazaar-nat-sg-${var.environment}"})
-#   )
-# }
+resource "aws_security_group" "nat_sg" {
+  name   = "BuildBazaar-nat-sg-${var.environment}"
+  vpc_id = aws_vpc.buildbazaar_vpc.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [aws_subnet.buildbazaar_subnet_private1.cidr_block, aws_subnet.buildbazaar_subnet_private2.cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = merge(
+    local.commonTags,
+    tomap({ "Name" = "BuildBazaar-nat-sg-${var.environment}" })
+  )
+}
 
 # Replaced with NAT Instance due to cost
 # resource "aws_eip" "buildbazaar_nat_gateway_ip" {
@@ -403,88 +403,88 @@ resource "aws_security_group" "rds_ec2_sg" {
 # }
 
 # NAT Instance
-# resource "aws_instance" "nat_instance" {
-#   ami                         = "ami-01bdb77dda67ff6b7"
-#   instance_type               = "t2.micro"
-#   subnet_id                   = aws_subnet.buildbazaar_subnet_public1.id
-#   vpc_security_group_ids = [aws_security_group.nat_sg.id]
-#   associate_public_ip_address = true
-#   ipv6_address_count = 1
+resource "aws_instance" "nat_instance" {
+  ami                         = "ami-01bdb77dda67ff6b7"
+  instance_type               = "t2.micro"
+  subnet_id                   = aws_subnet.buildbazaar_subnet_public1.id
+  vpc_security_group_ids      = [aws_security_group.nat_sg.id]
+  associate_public_ip_address = true
+  ipv6_address_count          = 1
+
+  # Disable source/destination check so that the instance can forward traffic
+  source_dest_check = false
+
+  tags = merge(
+    local.commonTags,
+    tomap({ "Name" = "NAT-Instance-${var.environment}" })
+  )
+}
+
+##### THESE ARE VERY EXPENSIVE, COMMENT WHEN NOT IN USE ###########
+# resource "aws_vpc_endpoint" "buildbazaar_ssm_endpoint" {
+#   vpc_id            = aws_vpc.buildbazaar_vpc.id
+#   service_name      = "com.amazonaws.${var.aws_region}.ssm"
+#   vpc_endpoint_type = "Interface"
 #
-#   # Disable source/destination check so that the instance can forward traffic
-#   source_dest_check = false
+#   security_group_ids = [
+#     aws_security_group.buildbazaar_ssm_sg.id
+#   ]
+#   subnet_ids = [
+#     aws_subnet.buildbazaar_subnet_private1.id,
+#     aws_subnet.buildbazaar_subnet_private2.id
+#   ]
+#
+#   private_dns_enabled = true
 #
 #   tags = merge(
 #     local.commonTags,
-#     tomap({"Name" = "NAT-Instance-${var.environment}"})
+#     tomap({ "Name" = "buildbazaar_ssm_endpoint-${var.environment}" })
 #   )
 # }
-
-##### THESE ARE VERY EXPENSIVE, COMMENT WHEN NOT IN USE ###########
-resource "aws_vpc_endpoint" "buildbazaar_ssm_endpoint" {
-  vpc_id            = aws_vpc.buildbazaar_vpc.id
-  service_name      = "com.amazonaws.${var.aws_region}.ssm"
-  vpc_endpoint_type = "Interface"
-
-  security_group_ids = [
-    aws_security_group.buildbazaar_ssm_sg.id
-  ]
-  subnet_ids = [
-    aws_subnet.buildbazaar_subnet_private1.id,
-    aws_subnet.buildbazaar_subnet_private2.id
-  ]
-
-  private_dns_enabled = true
-
-  tags = merge(
-    local.commonTags,
-    tomap({ "Name" = "buildbazaar_ssm_endpoint-${var.environment}" })
-  )
-}
-
-resource "aws_vpc_endpoint" "ec2messages_endpoint" {
-  vpc_id            = aws_vpc.buildbazaar_vpc.id
-  service_name      = "com.amazonaws.${var.aws_region}.ec2messages"
-  vpc_endpoint_type = "Interface"
-
-  security_group_ids = [
-    aws_security_group.buildbazaar_ssm_sg.id
-  ]
-
-  subnet_ids = [
-    aws_subnet.buildbazaar_subnet_private1.id,
-    aws_subnet.buildbazaar_subnet_private2.id
-  ]
-
-  private_dns_enabled = true
-
-  tags = merge(
-    local.commonTags,
-    tomap({ "Name" = "ec2messages_endpoint-${var.environment}" })
-  )
-}
-
-resource "aws_vpc_endpoint" "ssmmessages_endpoint" {
-  vpc_id            = aws_vpc.buildbazaar_vpc.id
-  service_name      = "com.amazonaws.${var.aws_region}.ssmmessages"
-  vpc_endpoint_type = "Interface"
-
-  security_group_ids = [
-    aws_security_group.buildbazaar_ssm_sg.id
-  ]
-
-  subnet_ids = [
-    aws_subnet.buildbazaar_subnet_private1.id,
-    aws_subnet.buildbazaar_subnet_private2.id
-  ]
-
-  private_dns_enabled = true
-
-  tags = merge(
-    local.commonTags,
-    tomap({ "Name" = "ec2messages_endpoint-${var.environment}" })
-  )
-}
+#
+# resource "aws_vpc_endpoint" "ec2messages_endpoint" {
+#   vpc_id            = aws_vpc.buildbazaar_vpc.id
+#   service_name      = "com.amazonaws.${var.aws_region}.ec2messages"
+#   vpc_endpoint_type = "Interface"
+#
+#   security_group_ids = [
+#     aws_security_group.buildbazaar_ssm_sg.id
+#   ]
+#
+#   subnet_ids = [
+#     aws_subnet.buildbazaar_subnet_private1.id,
+#     aws_subnet.buildbazaar_subnet_private2.id
+#   ]
+#
+#   private_dns_enabled = true
+#
+#   tags = merge(
+#     local.commonTags,
+#     tomap({ "Name" = "ec2messages_endpoint-${var.environment}" })
+#   )
+# }
+#
+# resource "aws_vpc_endpoint" "ssmmessages_endpoint" {
+#   vpc_id            = aws_vpc.buildbazaar_vpc.id
+#   service_name      = "com.amazonaws.${var.aws_region}.ssmmessages"
+#   vpc_endpoint_type = "Interface"
+#
+#   security_group_ids = [
+#     aws_security_group.buildbazaar_ssm_sg.id
+#   ]
+#
+#   subnet_ids = [
+#     aws_subnet.buildbazaar_subnet_private1.id,
+#     aws_subnet.buildbazaar_subnet_private2.id
+#   ]
+#
+#   private_dns_enabled = true
+#
+#   tags = merge(
+#     local.commonTags,
+#     tomap({ "Name" = "ec2messages_endpoint-${var.environment}" })
+#   )
+# }
 ############ END EXPENSIVE ZONE ######################
 
 
@@ -548,8 +548,9 @@ resource "aws_autoscaling_group" "buildbazaar_asg" {
 
   target_group_arns = [aws_lb_target_group.buildbazaar_tg.arn]
 
-  health_check_type         = "ELB"
-  health_check_grace_period = 600 # Time to allow instances to boot up
+  # health_check_type         = "ELB"
+  health_check_type         = "EC2" #Changed to EC2 only checks due to SSM IPv4 Issue
+  health_check_grace_period = 600   # Time to allow instances to boot up
 
   tag {
     key                 = "Name"
@@ -682,7 +683,7 @@ resource "aws_launch_template" "buildbazaar_launch_template" {
     name = aws_iam_instance_profile.ec2_instance_profile.name
   }
 
-  #key_name = "your-key-pair"  # Optional if you need SSH access
+  key_name = aws_key_pair.buildbazaar_rds_keypair.key_name # Optional if you need SSH access
 
   #vpc_security_group_ids = [aws_security_group.buildbazaar_private_sg.id]
 
