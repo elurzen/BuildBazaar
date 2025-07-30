@@ -101,7 +101,8 @@ namespace BuildBazaarCore.Services
 			}
 			catch (MySqlException ex)
 			{
-				return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : GetBuilds : Error - {ex.Message}");
+				return Json(new { success = false, errorMessage = "Something went wrong" });
 			}
 		}
 
@@ -111,6 +112,8 @@ namespace BuildBazaarCore.Services
 			{
 				if (!string.IsNullOrWhiteSpace(userName) && !Regex.IsMatch(userName, "^[a-zA-Z0-9_.-]+$"))
 				{
+
+					Console.WriteLine($"BuildService.cs : GetPublicBuilds : Error - Invalid Username");
 					return Json(new { success = false, errorMessage = "Invalid username format" });
 				}
 				uint userID;
@@ -129,6 +132,8 @@ namespace BuildBazaarCore.Services
 
 							if (result == null)
 							{
+
+								Console.WriteLine($"BuildService.cs : GetPublicBuilds : Error - Username Not Found");
 								return Json(new { success = false, errorMessage = "Invalid request" });
 							}
 							userID = Convert.ToUInt32(result);
@@ -180,7 +185,8 @@ namespace BuildBazaarCore.Services
 			}
 			catch (MySqlException ex)
 			{
-				return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : GetPublicBuilds : Error - {ex.Message}");
+				return Json(new { success = false, errorMessage = "Something went wrong" });
 			}
 		}
 
@@ -342,7 +348,9 @@ namespace BuildBazaarCore.Services
 						{
 							await _awsService.DeleteFilesFromS3(s3Objects);
 						}
-						return Json(new { success = false, errorMessage = ex.Message });
+
+						Console.WriteLine($"BuildService.cs : Create Build : Error - {ex.Message}");
+						return Json(new { success = false, errorMessage = "Something went wrong" });
 					}
 				}
 			}
@@ -678,7 +686,8 @@ namespace BuildBazaarCore.Services
 						{
 							await _awsService.DeleteFilesFromS3(s3Objects);
 						}
-						return Json(new { success = false, errorMessage = ex.Message });
+						Console.WriteLine($"BuildService.cs : EditBuild : Error - {ex.Message}");
+						return Json(new { success = false, errorMessage = "Something went wrong" });
 					}
 				}
 			}
@@ -864,7 +873,9 @@ namespace BuildBazaarCore.Services
 					{
 						await transaction.RollbackAsync();
 						await _awsService.DeleteFilesFromS3(s3Objects);
-						return Json(new { success = false, errorMessage = ex.Message });
+
+						Console.WriteLine($"BuildService.cs : CopyBuild : Error - {ex.Message}");
+						return Json(new { success = false, errorMessage = "Something went wrong" });
 					}
 				}
 			}
@@ -956,141 +967,12 @@ namespace BuildBazaarCore.Services
 					catch (Exception ex)
 					{
 						await transaction.RollbackAsync();
-						return Json(new { success = false, errorMessage = ex.Message });
+						Console.WriteLine($"BuildService.cs : DeleteBuild : Error - {ex.Message}");
+						return Json(new { success = false, errorMessage = "Something went wrong" });
 					}
 				}
 			}
 		}
-
-		//public async Task<IActionResult> SearchBuilds(int page, string sortBy, IFormCollection request)
-		//{
-		//	try
-		//	{
-		//		List<BuildSearchModel> builds = new List<BuildSearchModel>();
-		//		using (MySqlConnection connection = new MySqlConnection(_configService.GetConnectionString()))
-		//		{
-		//			int offset = (page - 1 ) * 20;
-		//			connection.Open();
-		//			string query = @"
-		//				SELECT b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
-		//				FROM Builds b 
-		//				JOIN Images i ON i.buildID = b.buildID 
-		//				JOIN Users u ON u.userID = b.userID 
-		//				LEFT JOIN Classes c ON c.classID = b.classID
-		//				LEFT JOIN Games g ON g.gameID = b.gameID
-		//				LEFT JOIN BuildTagLinks btl ON btl.buildID = b.buildID
-		//				LEFT JOIN Tags t ON t.tagID = btl.tagID
-		//				WHERE b.isPublic = 1 
-		//				AND b.gameID = @gameID
-		//				AND i.typeID = 1"
-		//				;
-
-
-
-
-
-		//			//@"
-		//			//    SELECT b.buildID, b.buildName, b.userID, i.filePath, u.userName, 
-		//			//           g.gameName, c.className, GROUP_CONCAT(t.tagName SEPARATOR ', ') as tags
-		//			//    FROM Builds b 
-		//			//    JOIN Images i ON i.buildID = b.buildID 
-		//			//    JOIN Users u ON u.userID = b.userID 
-		//			//    LEFT JOIN Games g ON g.gameID = b.gameID
-		//			//    LEFT JOIN Classes c ON c.classID = b.classID
-		//			//    LEFT JOIN BuildTags bt ON bt.buildID = b.buildID
-		//			//    LEFT JOIN Tags t ON t.tagID = bt.tagID
-		//			//    WHERE b.isPublic = 1 
-		//			//    AND i.typeID = 1 ";
-
-		//			if (!string.IsNullOrEmpty(request["buildName"]))
-		//				query += " AND LOWER(b.buildName) LIKE LOWER(@buildName) ";
-
-		//			if (!string.IsNullOrEmpty(request["author"]))
-		//				query += " AND LOWER(u.userName) LIKE LOWER(@author) ";
-
-		//			if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
-		//				query += " AND b.classID = @classID ";
-
-		//			//if (request["gameID"] != "0" && !string.IsNullOrEmpty(request["gameID"]))
-		//			//    query += " AND b.gameID = @gameId ";
-
-		//			if (!string.IsNullOrEmpty(request["tags"]))
-		//			{
-		//				var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
-
-		//				// For each tag, we'll count if it exists for the build
-		//				for (int i = 0; i < tagsList.Count; i++)
-		//				{
-		//					// Create a subquery condition for each tag
-		//					query += $" AND EXISTS (SELECT 1 FROM BuildTagLinks btl{i} " +
-		//						$"JOIN Tags t{i} ON t{i}.tagID = btl{i}.tagID " +
-		//						$"WHERE btl{i}.buildID = b.buildID AND t{i}.tagName = LOWER(@tag{i}))";
-		//				}
-		//			}
-
-		//			//query += " AND t.tagName IN (@tags) ";
-
-		//			// Group by to handle the tag concatenation
-		//			query += " GROUP BY b.buildID, b.buildName, c.className, b.userID, i.filePath, u.userName, g.gameName ";
-
-		//			// Add sorting
-		//			query += @" ORDER BY 
-		//				CASE WHEN @sortBy = 'newest' THEN b.buildID END DESC,
-		//			CASE WHEN @sortBy = 'oldest' THEN b.buildID END ASC
-		//				LIMIT 20 OFFSET @offset";
-
-		//			using (MySqlCommand command = new MySqlCommand(query, connection))
-		//			{
-		//				command.Parameters.AddWithValue("@offset", offset);
-		//				command.Parameters.AddWithValue("@sortBy", sortBy);
-		//				command.Parameters.AddWithValue("@gameID", request["gameId"]);
-
-		//				// Add parameters for search filters
-		//				if (!string.IsNullOrEmpty(request["buildName"]))
-		//					command.Parameters.AddWithValue("@buildName", "%" + request["buildName"] + "%");
-
-		//				if (!string.IsNullOrEmpty(request["author"]))
-		//					command.Parameters.AddWithValue("@author", "%" + request["author"] + "%");
-
-		//				if (request["classId"] != "0" && !string.IsNullOrEmpty(request["classId"]))
-		//					command.Parameters.AddWithValue("@classID", request["classId"]);
-
-		//				if (!string.IsNullOrEmpty(request["tags"]))
-		//				{
-		//					var tagsList = request["tags"].ToString().Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrEmpty(t)).ToList();
-		//					for (int i = 0; i < tagsList.Count; i++)
-		//					{
-		//						command.Parameters.AddWithValue($"@tag{i}", tagsList[i]);
-		//					}
-		//				}
-
-		//				using (DbDataReader reader = await command.ExecuteReaderAsync())
-		//				{
-		//					while (reader.Read())
-		//					{
-		//						BuildSearchModel build = new BuildSearchModel
-		//						{
-		//							buildID = Convert.ToUInt32(reader["buildID"]),
-		//							buildName = Convert.ToString(reader["buildName"]),
-		//							userID = Convert.ToUInt32(reader["userID"]),
-		//							userName = Convert.ToString(reader["userName"]),
-		//							filePath = Convert.ToString(reader["filePath"]),
-		//							gameName = Convert.ToString(reader["gameName"]),
-		//							className = Convert.ToString(reader["className"]),
-		//							tags = Convert.ToString(reader["tags"])
-		//						};
-		//						builds.Add(build);
-		//					}
-		//				}
-		//			}
-		//		}
-		//		return Json(new { success = true, builds });
-		//	}
-		//	catch (MySqlException ex)
-		//	{
-		//		return Json(new { success = false, errorMessage = ex.Message });
-		//	}
-		//}
 
 		public async Task<IActionResult> SearchBuilds(int page, string sortBy, IFormCollection request)
 		{
@@ -1164,7 +1046,8 @@ namespace BuildBazaarCore.Services
 			}
 			catch(Exception ex)
 			{
-				return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : SearchBuilds : Error - {ex.Message}");
+				return Json(new { success = false, errorMessage = "Something went wrong" });
 			}			
 		}
 		public async Task<IActionResult> GetClassesAndTags(int lastTagID = 0, int lastClassID = 0)
@@ -1211,7 +1094,8 @@ namespace BuildBazaarCore.Services
 				}
 				catch (Exception ex)
 				{
-					return Json(new { success = false, errorMessage = ex.Message });
+					Console.WriteLine($"BuildService.cs : GetClassesAndTags : Error - {ex.Message}");
+					return Json(new { success = false, errorMessage = "Something went wrong" });
 				}
 			}
 		}

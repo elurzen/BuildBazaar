@@ -58,6 +58,7 @@ namespace BuildBazaarCore.Services
             }
             catch (Exception ex)
             {
+				Console.WriteLine($"UserService.cs : ValidateToken : Error - {ex.Message}");
                 return null;
             }
 
@@ -158,7 +159,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"UserService.cs : CreateUser : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -218,7 +220,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"UserService.cs : Login : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -262,11 +265,19 @@ namespace BuildBazaarCore.Services
                     await command.ExecuteNonQueryAsync();
                 }
 
+				try
+				{
                 // Send the email with the reset link
-                string resetLink = $"https://{host}/ResetPassword/{resetToken}";
-                await _awsService.SendEmail(email, "Password Reset", $"Username: {username}<br><br>Click the link to reset your password: {resetLink}");
+					string resetLink = $"https://{host}/ResetPassword/{resetToken}";
+					await _awsService.SendEmail(email, "Password Reset", $"Username: {username}<br><br>Click the link to reset your password: {resetLink}");
 
-                return Json(new { success = true, message = "If the email is registered, you will receive a reset link." });
+					return Json(new { success = true, message = "If the email is registered, you will receive a reset link." });
+				}
+				catch(Exception ex)
+				{
+					Console.WriteLine($"UserService.cs : RequestPasswordReset : Error - {ex.Message}");
+					return Json(new { success = false, message = "An error occurred while sending the email." });
+				}
             }
         }
 
@@ -330,6 +341,7 @@ namespace BuildBazaarCore.Services
                     }
                     catch (Exception ex)
                     {
+						Console.WriteLine($"UserService.cs : UpdatePasswordWithToken : Error - {ex.Message}");
                         await transaction.RollbackAsync();
                         throw;
                     }
@@ -338,6 +350,5 @@ namespace BuildBazaarCore.Services
             }
         }
     }
-
 }
 

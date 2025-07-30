@@ -66,7 +66,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : GetBuildUrls : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -137,7 +138,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : CreateBuildUrl : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -183,7 +185,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : UpdateBuildUrl : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -211,7 +214,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"BuildService.cs : DeleteBuildUrl : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
     }

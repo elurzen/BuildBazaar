@@ -71,7 +71,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"NoteService.cs : GetNote : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -104,6 +105,7 @@ namespace BuildBazaarCore.Services
 
                 if (string.IsNullOrEmpty(filePath))
                 {
+					Console.WriteLine($"NoteService.cs : SetNote : File path not found {filePath}");
                     return Json(new { success = false, errorMessage = "File path not found." });
                 }
 
@@ -124,7 +126,8 @@ namespace BuildBazaarCore.Services
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"NoteService.cs : SetNote : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
     }

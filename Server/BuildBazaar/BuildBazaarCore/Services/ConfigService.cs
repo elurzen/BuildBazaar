@@ -83,7 +83,7 @@ namespace BuildBazaarCore.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error getting parameter {parameter}: {ex.Message}");
+                    Console.WriteLine($"ConfigService.cs : Error getting parameter {parameter}: {ex.Message}");
                 }
             }
 

@@ -13,7 +13,7 @@ COPY ["BuildBazaarCore/BuildBazaarCore.csproj", "BuildBazaarCore/"]
 RUN dotnet restore "./BuildBazaarCore/BuildBazaarCore.csproj"
 COPY . .
 WORKDIR "/src/BuildBazaarCore"
-RUN dotnet bnild "./BuildBazaarCore.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./BuildBazaarCore.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release

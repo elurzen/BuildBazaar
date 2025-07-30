@@ -97,12 +97,12 @@ namespace BuildBazaarCore.Services
             }
             catch (AmazonS3Exception ex)
             {
-                Console.WriteLine($"Error encountered on server. Message: {ex.Message}");
+                Console.WriteLine($"AwsService.cs : CopyS3ObjectAsync : Error - {ex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Unknown error encountered. Message: {ex.Message}");
+                Console.WriteLine($"AwsService.cs : CopyS3ObjectAsync : Error - {ex.Message}");
                 return false;
             }
         }
@@ -123,7 +123,7 @@ namespace BuildBazaarCore.Services
             catch (Exception ex)
             {
                 // Handle exceptions (e.g., log the error)
-                Console.WriteLine($"Error deleting file from S3: {ex.Message}");
+                Console.WriteLine($"AwsService.cs : DeleteFileFromS3 : Error - {ex.Message}");
                 return false; // Return false if deletion fails
             }
         }
@@ -148,7 +148,7 @@ namespace BuildBazaarCore.Services
                 {
                     foreach (var error in response.DeleteErrors)
                     {
-                        Console.WriteLine($"Failed to delete {error.Key}: {error.Message}");
+						Console.WriteLine($"AwsService.cs : DeleteFilesFromS3 : Failed to delete {error.Key} Error - {error.Message}");
                     }
                     return false; // Indicate failure due to partial errors
                 }
@@ -158,7 +158,7 @@ namespace BuildBazaarCore.Services
             catch (Exception ex)
             {
                 // Handle exceptions (e.g., log the error)
-                Console.WriteLine($"Error deleting file from S3: {ex.Message}");
+				Console.WriteLine($"AwsService.cs : DeleteFilesFromS3 : Error - {ex.Message}");
                 return false; // Return false if deletion fails
             }
         }
@@ -217,7 +217,8 @@ namespace BuildBazaarCore.Services
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"AwsService.cs : GenerateCloudFrontSignedUrl : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -296,7 +297,8 @@ namespace BuildBazaarCore.Services
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"AwsService.cs : GetBulkImageUrls : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
         
@@ -332,7 +334,8 @@ namespace BuildBazaarCore.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error sending email: " + ex.Message);
+				Console.WriteLine($"AwsService.cs : SendEmail : Error - {ex.Message}");
+				throw;
             }
         }
     }

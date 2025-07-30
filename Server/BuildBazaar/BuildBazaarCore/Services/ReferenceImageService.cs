@@ -115,7 +115,8 @@ namespace BuildBazaarCore.Services
                         {
                             await _awsService.DeleteFileFromS3(s3ImageFilePath);
                         }
-                        return Json(new { success = false, errorMessage = ex.Message });
+						Console.WriteLine($"ReferenceImageService.cs : UploadReferenceImage : Error - {ex.Message}");
+                        return Json(new { success = false, errorMessage = "Something went wrong" });
                     }
                 }
             }
@@ -159,7 +160,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"ReferenceImageService.cs : GetReferenceImages : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -188,7 +190,8 @@ namespace BuildBazaarCore.Services
             }
             catch (Exception ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"ReferenceImageService.cs : SaveImageOrder : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
 
@@ -242,7 +245,8 @@ namespace BuildBazaarCore.Services
             }
             catch (MySqlException ex)
             {
-                return Json(new { success = false, errorMessage = ex.Message });
+				Console.WriteLine($"ReferenceImageService.cs : DeleteReferenceImage : Error - {ex.Message}");
+                return Json(new { success = false, errorMessage = "Something went wrong" });
             }
         }
     }
