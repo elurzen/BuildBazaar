@@ -14,6 +14,8 @@ services:
       - bazaarnet
     environment:
         AWS_REGION: us-east-1
+        AWS_ACCESS_KEY_ID: your-access-key-here
+        AWS_SECRET_ACCESS_KEY: your-secret-key-here
         ENVIRONMENT: local
         REGION: us-east-1
         DB_HOST: db

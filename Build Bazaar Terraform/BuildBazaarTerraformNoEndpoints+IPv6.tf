@@ -500,8 +500,8 @@ resource "aws_lb" "buildbazaar_alb" {
     aws_subnet.buildbazaar_subnet_public2.id
   ]
 
-  # ip_address_type = "dualstack"
-  ip_address_type = "dualstack-without-public-ipv4"
+  ip_address_type = "dualstack"
+#   ip_address_type = "dualstack-without-public-ipv4"
 
   tags = merge(
     local.commonTags,

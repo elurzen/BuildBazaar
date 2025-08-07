@@ -11,6 +11,7 @@ using System.Data;
 using System.Data.Common;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Amazon.Runtime.Internal.Auth;
 
 namespace BuildBazaarCore.Services
 {
@@ -194,7 +195,7 @@ namespace BuildBazaarCore.Services
                 // Continue if there are more objects to list
                 listRequest.ContinuationToken = listResponse.NextContinuationToken;
 
-            } while (listResponse.IsTruncated); // Loop if not all objects are retrieved in one call
+            } while (listResponse.IsTruncated == true); // Loop if not all objects are retrieved in one call
         }
 
         public IActionResult GenerateCloudFrontSignedUrl(string filePath)
@@ -207,12 +208,16 @@ namespace BuildBazaarCore.Services
 
             try
             {
+                
                 string signedUrl = AmazonCloudFrontUrlSigner.GetCannedSignedURL(
                    fullUrl,
                    privateKeyReader,
                    keyPairId,
                    DateTime.UtcNow.AddDays(1)
                 );
+                //AmazonCloudFrontClient x = new();
+                CloudFrontSigner x = new();
+                
                 return Json(new { success = true, url = signedUrl });
             }
             catch (Exception ex)
